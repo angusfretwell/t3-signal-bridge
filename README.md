@@ -23,7 +23,7 @@ Run the installer on the machine where T3 Code runs:
 npx t3-signal-bridge install
 ```
 
-The installer asks for the bot's number, your Signal number and a default project (No project unless you pick one). It registers the bot with Signal, sends you a test message, and starts the bridge as a background service.
+The installer asks for the bot's number, your Signal number, and the project that new threads start in. It registers the bot with Signal, sends you a test message, and starts the bridge as a background service.
 
 On your phone, save the bot as a contact so that its messages notify you.
 
@@ -35,12 +35,21 @@ If you can't continue without the owner's decision, run `signal-ask "<question>"
 
 To change your settings, run `npx t3-signal-bridge install` again.
 
+## Usage
+
+A message to the bot starts a thread in the project you chose during install. To start it in another project, begin the message with the project's name and a colon:
+
+```text
+api: bump the dependencies
+```
+
+The project name is its T3 Code title in lowercase, with dashes for spaces, so "My API" becomes `my-api`.
+
 ## Reference
 
-| Command                              | What it does                                                                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `npx t3-signal-bridge status`        | Shows whether the bridge's service is installed and running, and where its logs are.                                           |
-| `npx t3-signal-bridge@latest update` | Installs the latest version and restarts the bridge.                                                                           |
-| `signal-ask "<question>"`            | Sends a question from the T3 Code thread it runs in. Pipe longer questions on stdin.                                           |
-| `npx t3-signal-bridge run`           | Runs the bridge in your terminal, for machines without systemd. Stop the service first if it's running.                        |
-| `npx t3-signal-bridge uninstall`     | Stops the bridge and removes its service. Keeps your config and the bot's Signal keys, so `install` can set it up again later. |
+| Command                              | What it does                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `npx t3-signal-bridge status`        | Shows whether the bridge's service is installed and running, and where its logs are.   |
+| `npx t3-signal-bridge@latest update` | Installs the latest version and restarts the bridge.                                   |
+| `signal-ask "<question>"`            | Sends a question from the T3 Code thread it runs in. Pipe longer questions on stdin.   |
+| `npx t3-signal-bridge uninstall`     | Stops the bridge and removes its service. Keeps your config and the bot's Signal keys. |
