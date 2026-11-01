@@ -81,6 +81,19 @@ async function askDefaultProject(existing?: string) {
   return choice || undefined;
 }
 
+async function askPin(): Promise<string> {
+  const pin = answer(
+    await p.password({
+      message: "Choose a Signal PIN for the bot. It stops anyone else registering the number.",
+      validate: (value) => (value && value.length >= 4 ? undefined : "Use at least 4 characters"),
+    }),
+  );
+  const confirmation = answer(await p.password({ message: "Enter the PIN again" }));
+  if (confirmation === pin) return pin;
+  p.log.warn("The PINs don't match. Try again.");
+  return askPin();
+}
+
 async function register(commands: ReturnType<typeof signalCliCommands>) {
   p.note(
     [
@@ -113,15 +126,12 @@ async function register(commands: ReturnType<typeof signalCliCommands>) {
   const code = answer(await p.text({ message: "Verification code", placeholder: "123-456" }));
   await step("Verifying", "Number verified", () => commands.verify(code));
 
-  const pin = answer(
-    await p.password({
-      message: "Choose a Signal PIN for the bot. It stops anyone else registering the number.",
-      validate: (value) => (value && value.length >= 4 ? undefined : "Use at least 4 characters"),
-    }),
-  );
+  const pin = await askPin();
   await step("Setting the PIN", "Registration lock is on", () => commands.setPin(pin));
 
-  const name = answer(await p.text({ message: "Bot's Signal profile name", initialValue: "T3" }));
+  const name = answer(
+    await p.text({ message: "Bot's Signal profile name", initialValue: "T3 Code" }),
+  );
   await step("Setting the profile name", "Profile name set", () => commands.setName(name));
 }
 
@@ -213,16 +223,15 @@ export async function install(appSource: string) {
     );
   }
 
-  p.note(
+  p.outro("Done");
+  console.log(
     [
       "Save the bot as a contact so its messages notify you.",
+      "",
       "To let agents ask you questions, add this to your AGENTS.md or task prompt:",
       "",
-      "  If you can't continue without the owner's decision, run",
-      '  `signal-ask "<question>"` and end your turn. Their reply',
-      "  arrives as your next message.",
+      "If you can't continue without the owner's decision, run `signal-ask \"<question>\"` and end your turn. Their reply arrives as your next message.",
+      "",
     ].join("\n"),
-    "Next",
   );
-  p.outro("Done");
 }
