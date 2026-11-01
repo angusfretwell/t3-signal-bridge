@@ -15,6 +15,17 @@ function describe(result: RunResult) {
   return `Run ${result.status}${result.error ? `: ${result.error}` : ""}${result.reply ? `\n\n${result.reply}` : ""}`;
 }
 
+const maxTitleLength = 40;
+
+export function threadHeader(title: string) {
+  const characters = [...title];
+  if (characters.length <= maxTitleLength) return `🧵 ${title}`;
+  return `🧵 ${characters
+    .slice(0, maxTitleLength - 1)
+    .join("")
+    .trimEnd()}…`;
+}
+
 function parseJson(body: string): unknown {
   try {
     return JSON.parse(body);
@@ -38,7 +49,7 @@ export function runBridge(config: Config) {
 
   async function sendFromThread(threadId: string, body: string) {
     const title = await t3.threadTitle(threadId).catch(() => threadId);
-    store.remember(await signal.send(`🧵 ${title}\n\n${body}`), threadId);
+    store.remember(await signal.send(`${threadHeader(title)}\n\n${body}`), threadId);
   }
 
   async function run(
