@@ -2,7 +2,7 @@
 
 Start, answer and follow [T3 Code](https://github.com/pingdotgg/t3code) threads from Signal:
 
-- Message the bot to start a thread in your default project. Prefix a T3 Code project name (`api: bump deps`) to pick another.
+- Message the bot to start a thread in your default project.
 - Quote-reply to a bot message to answer its thread.
 - Bot reacts 👀 when it gets your message and replies when its thread finishes.
 - Let agents ask you questions and wait for your answer.
