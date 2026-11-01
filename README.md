@@ -37,42 +37,10 @@ To change your settings, run `npx t3-signal-bridge install` again.
 
 ## Usage
 
-### Check the bridge
-
-```sh
-npx t3-signal-bridge status
-```
-
-Shows whether the bridge's service is installed and running, and where its logs are.
-
-### Update
-
-```sh
-npx t3-signal-bridge@latest update
-```
-
-Installs the latest version and restarts the bridge.
-
-### Ask from a thread
-
-```sh
-signal-ask "<question>"
-```
-
-Sends a question from the T3 Code thread it runs in. Pipe longer questions on stdin.
-
-### Run in the foreground
-
-```sh
-npx t3-signal-bridge run
-```
-
-Runs the bridge in your terminal, for machines without systemd. Stop the service first if it's running.
-
-### Uninstall
-
-```sh
-npx t3-signal-bridge uninstall
-```
-
-Stops the bridge and removes its service. Your config and the bot's Signal keys stay, so `install` can set it up again without registering the number.
+| Command                              | What it does                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `npx t3-signal-bridge status`        | Shows whether the bridge's service is installed and running, and where its logs are.                                           |
+| `npx t3-signal-bridge@latest update` | Installs the latest version and restarts the bridge.                                                                           |
+| `signal-ask "<question>"`            | Sends a question from the T3 Code thread it runs in. Pipe longer questions on stdin.                                           |
+| `npx t3-signal-bridge run`           | Runs the bridge in your terminal, for machines without systemd. Stop the service first if it's running.                        |
+| `npx t3-signal-bridge uninstall`     | Stops the bridge and removes its service. Keeps your config and the bot's Signal keys, so `install` can set it up again later. |
