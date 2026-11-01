@@ -63,6 +63,12 @@ export function lingerEnabled() {
   return result.stdout.trim() === "Linger=yes";
 }
 
+export function serviceStatus() {
+  if (!existsSync(paths.unit)) return "not installed";
+  const result = spawnSync("systemctl", ["--user", "is-active", serviceName], { encoding: "utf8" });
+  return result.stdout.trim() === "active" ? "running" : "stopped";
+}
+
 export function uninstall() {
   if (existsSync(paths.unit)) {
     spawnSync("systemctl", ["--user", "disable", "--now", serviceName], { stdio: "ignore" });

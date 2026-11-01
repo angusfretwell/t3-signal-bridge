@@ -33,6 +33,8 @@ To let agents ask you questions, add this line to your AGENTS.md or to a schedul
 If you can't continue without the owner's decision, run `signal-ask "<question>"` and end your turn. Their reply arrives as your next message.
 ```
 
+To check that the bridge is running, run `npx t3-signal-bridge status`.
+
 To change your settings, run `npx t3-signal-bridge install` again.
 
 To remove the bridge, run `npx t3-signal-bridge uninstall`.
