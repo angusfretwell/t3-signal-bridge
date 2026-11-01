@@ -22,6 +22,7 @@ function localFile(url: string) {
     const path = url.startsWith("file:") ? fileURLToPath(url) : url;
     if (!path.startsWith("/")) return undefined;
     if (isFile(path)) return path;
+
     const decoded = decodeURIComponent(path);
     return isFile(decoded) ? decoded : undefined;
   } catch {
@@ -31,16 +32,16 @@ function localFile(url: string) {
 
 function tableLines(table: Table) {
   const rows = table.children.map((row) => row.children.map((cell) => toString(cell)));
-  const widths = rows[0]?.map((_, column) =>
+  const [header = [], ...body] = rows;
+  const widths = header.map((_, column) =>
     Math.max(...rows.map((row) => row[column]?.length ?? 0)),
   );
-  if (!widths) return [];
   const line = (cells: string[]) =>
     widths
       .map((width, column) => (cells[column] ?? "").padEnd(width))
       .join(" │ ")
       .trimEnd();
-  const [header = [], ...body] = rows;
+
   return [line(header), widths.map((width) => "─".repeat(width)).join("─┼─"), ...body.map(line)];
 }
 
@@ -51,26 +52,31 @@ function listMarker(item: ListItem, number: number | undefined) {
 
 export function toSignal(markdown: string) {
   let text = "";
+  let indent = "";
   const styles: StyleRange[] = [];
   const attachments: string[] = [];
-  let indent = "";
 
   function write(value: string) {
     text += value.replaceAll("\n", `\n${indent}`);
   }
 
-  function styled(style: TextStyle, render: () => void) {
+  function styled(style: TextStyle, content: () => void) {
     const start = text.length;
-    render();
+    content();
     if (text.length > start) styles.push({ start, length: text.length - start, style });
   }
 
-  function indented(prefix: string, render: () => void, continuation = " ".repeat(prefix.length)) {
+  function indented(prefix: string, content: () => void, continuation = " ".repeat(prefix.length)) {
     const outer = indent;
     indent += continuation;
     write(prefix);
-    render();
+    content();
     indent = outer;
+  }
+
+  function truncate(length: number) {
+    text = text.slice(0, length);
+    while ((styles.at(-1)?.start ?? -1) >= length) styles.pop();
   }
 
   function blocks<T extends Nodes>(
@@ -78,17 +84,16 @@ export function toSignal(markdown: string) {
     separator: string,
     renderChild: (child: T, index: number) => void = render,
   ) {
-    let first = true;
+    let wroteBlock = false;
     for (const [index, child] of children.entries()) {
       const before = text.length;
-      if (!first) write(separator);
+      if (wroteBlock) write(separator);
       const afterSeparator = text.length;
       renderChild(child, index);
-      if (text.slice(afterSeparator).trim()) first = false;
-      else {
-        text = text.slice(0, before);
-        while ((styles.at(-1)?.start ?? -1) >= before) styles.pop();
-      }
+
+      const blank = !text.slice(afterSeparator).trim();
+      if (blank) truncate(before);
+      else wroteBlock = true;
     }
   }
 
@@ -155,6 +160,7 @@ export function toSignal(markdown: string) {
     mdastExtensions: [gfmFromMarkdown()],
   });
   render(tree);
+
   return { text, styles, attachments };
 }
 
@@ -163,10 +169,9 @@ const maxTitleLength = 40;
 export function threadHeader(title: string) {
   const characters = Array.from(new Intl.Segmenter().segment(title), ({ segment }) => segment);
   if (characters.length <= maxTitleLength) return `🧵 ${title}`;
-  return `🧵 ${characters
-    .slice(0, maxTitleLength - 1)
-    .join("")
-    .trimEnd()}…`;
+
+  const cut = characters.slice(0, maxTitleLength - 1).join("");
+  return `🧵 ${cut.trimEnd()}…`;
 }
 
 export function threadMessage(title: string, markdown: string) {
@@ -181,5 +186,7 @@ export function threadMessage(title: string, markdown: string) {
 
 export function runReport(result: RunResult) {
   if (result.status === "completed") return result.reply || "(no reply)";
-  return `Run ${result.status}${result.error ? `: ${result.error}` : ""}${result.reply ? `\n\n${result.reply}` : ""}`;
+
+  const summary = result.error ? `Run ${result.status}: ${result.error}` : `Run ${result.status}`;
+  return result.reply ? `${summary}\n\n${result.reply}` : summary;
 }

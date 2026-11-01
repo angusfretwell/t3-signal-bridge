@@ -4,6 +4,12 @@ import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { runReport, threadHeader, threadMessage, toSignal } from "./format.ts";
 
+function emptyFile(name: string) {
+  const file = join(mkdtempSync(join(tmpdir(), "format-")), name);
+  writeFileSync(file, "");
+  return file;
+}
+
 function styledText(markdown: string) {
   const { text, styles } = toSignal(markdown);
   return {
@@ -29,8 +35,7 @@ describe("toSignal", () => {
   });
 
   test("counts offsets in UTF-16 units after emoji", () => {
-    const { text, styles } = toSignal("👩‍💻 **ok**");
-    expect(text.slice(styles[0]!.start, styles[0]!.start + styles[0]!.length)).toBe("ok");
+    expect(styledText("👩‍💻 **ok**")).toEqual({ text: "👩‍💻 ok", styles: [["BOLD", "ok"]] });
   });
 
   test("keeps code blocks whole in monospace", () => {
@@ -80,9 +85,7 @@ describe("toSignal", () => {
   });
 
   test("attaches local images and drops them from the text", () => {
-    const dir = mkdtempSync(join(tmpdir(), "format-"));
-    const image = join(dir, "shot one.png");
-    writeFileSync(image, "");
+    const image = emptyFile("shot one.png");
 
     expect(toSignal(`Here it is:\n\n![shot](<${image}>)\n\nLooks good.`)).toEqual({
       text: "Here it is:\n\nLooks good.",
@@ -94,10 +97,7 @@ describe("toSignal", () => {
   });
 
   test("drops the gap left by images on neighbouring lines", () => {
-    const dir = mkdtempSync(join(tmpdir(), "format-"));
-    const [one, two] = [join(dir, "one.png"), join(dir, "two.png")];
-    writeFileSync(one, "");
-    writeFileSync(two, "");
+    const [one, two] = [emptyFile("one.png"), emptyFile("two.png")];
 
     expect(toSignal(`Before:\n\n![one](${one})\n![two](${two})\n\nAfter.`)).toEqual({
       text: "Before:\n\nAfter.",
@@ -123,8 +123,7 @@ describe("toSignal", () => {
   });
 
   test("attaches files whose names contain a literal %", () => {
-    const image = join(mkdtempSync(join(tmpdir(), "format-")), "100%.png");
-    writeFileSync(image, "");
+    const image = emptyFile("100%.png");
     expect(toSignal(`![full](${image})`).attachments).toEqual([image]);
   });
 

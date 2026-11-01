@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { paths } from "./paths.ts";
 import { writeFileIn } from "./util.ts";
@@ -19,13 +19,8 @@ const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>;
 
 export function readConfig(): Config | undefined {
-  let raw: string;
-  try {
-    raw = readFileSync(paths.config, "utf8");
-  } catch {
-    return undefined;
-  }
-  return configSchema.parse(JSON.parse(raw));
+  if (!existsSync(paths.config)) return undefined;
+  return configSchema.parse(JSON.parse(readFileSync(paths.config, "utf8")));
 }
 
 export function loadConfig(): Config {

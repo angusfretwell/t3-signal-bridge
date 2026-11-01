@@ -12,6 +12,7 @@ import { onPath } from "./which.ts";
 
 const phoneNumber = /^\+[1-9]\d{6,14}$/;
 const examplePhone = "+61400000000";
+const defaultBotName = "T3 Code";
 
 function fail(message: string): never {
   p.cancel(message);
@@ -26,6 +27,7 @@ function answer<T>(value: T): Exclude<T, symbol> {
 async function step<T>(start: string, done: string, work: () => Promise<T>) {
   const spinner = p.spinner();
   spinner.start(start);
+
   try {
     const result = await work();
     spinner.stop(done);
@@ -82,11 +84,12 @@ async function askPin(): Promise<string> {
   );
   const confirmation = answer(await p.password({ message: "Enter the PIN again" }));
   if (confirmation === pin) return pin;
+
   p.log.warn("The PINs don't match. Try again.");
   return askPin();
 }
 
-async function register(commands: ReturnType<typeof signalAccount>) {
+async function register(account: ReturnType<typeof signalAccount>) {
   p.note(
     [
       "Signal needs a captcha before it sends a code.",
@@ -96,6 +99,7 @@ async function register(commands: ReturnType<typeof signalAccount>) {
     ].join("\n"),
     "Register the bot's number",
   );
+
   const captcha = answer(
     await p.text({
       message: "Paste the signalcaptcha:// link",
@@ -112,19 +116,20 @@ async function register(commands: ReturnType<typeof signalAccount>) {
     }),
   );
   await step("Asking Signal for a code", "Signal sent a code", () =>
-    commands.register(captcha, voice),
+    account.register(captcha, voice),
   );
 
   const code = answer(await p.text({ message: "Verification code", placeholder: "123-456" }));
-  await step("Verifying", "Number verified", () => commands.verify(code));
+  await step("Verifying", "Number verified", () => account.verify(code));
 
   const pin = await askPin();
-  await step("Setting the PIN", "Registration lock is on", () => commands.setPin(pin));
+  await step("Setting the PIN", "Registration lock is on", () => account.setPin(pin));
 
   const name = answer(
-    await p.text({ message: "Bot's Signal profile name", initialValue: "T3 Code" }),
+    await p.text({ message: "Bot's Signal profile name", initialValue: defaultBotName }),
   );
-  await step("Setting the profile name", "Profile name set", () => commands.setName(name));
+  await step("Setting the profile name", "Profile name set", () => account.setName(name));
+
   return name;
 }
 
@@ -133,6 +138,7 @@ async function requireT3(configured?: string) {
   const release = t3 && (await tryRun(t3, ["--version"]));
   if (!t3 || !release)
     fail("Couldn't run the T3 Code CLI. Install T3 Code, or put `t3` on your PATH.");
+
   p.log.success(`Found T3 Code ${release}`);
   return t3;
 }
@@ -170,20 +176,22 @@ export async function install(appSource: string) {
   const defaultProject = await askDefaultProject(existing?.defaultProject);
 
   await stopService();
-  const commands = signalAccount(signalCli, botNumber);
-  let botName = existing?.botName ?? "T3 Code";
-  if (await commands.isRegistered()) p.log.success(`${botNumber} is already registered`);
-  else botName = await register(commands);
+
+  const account = signalAccount(signalCli, botNumber);
+  let botName = existing?.botName ?? defaultBotName;
+  if (await account.isRegistered()) p.log.success(`${botNumber} is already registered`);
+  else botName = await register(account);
 
   await step("Sending you a test message", "Test message sent", () =>
-    commands.send(
+    account.send(
       owner,
       `👋 ${botName} is connected.\n\nSend a message here to start a T3 Code thread.`,
     ),
   );
-  const ownerUuid = await commands.uuidOf(owner).catch(() => undefined);
+  const ownerUuid = await account.uuidOf(owner).catch(() => undefined);
 
-  const t3Bin = existing?.t3Bin ?? (isAbsolute(t3) && !insideT3Home(t3) ? t3 : undefined);
+  const t3IsStable = isAbsolute(t3) && !insideT3Home(t3);
+  const t3Bin = existing?.t3Bin ?? (t3IsStable ? t3 : undefined);
   writeConfig({
     botNumber,
     botName,
@@ -196,8 +204,9 @@ export async function install(appSource: string) {
   });
 
   deploy(appSource);
-  if (!onPath(dirname(paths.askShim)))
-    p.log.warn(`Add ${dirname(paths.askShim)} to your PATH so agents can run signal-ask.`);
+  const shimDir = dirname(paths.askShim);
+  if (!onPath(shimDir)) p.log.warn(`Add ${shimDir} to your PATH so agents can run signal-ask.`);
+
   if (await hasSystemd()) {
     await step("Starting the bridge", "Bridge running as a systemd user service", startService);
     if (!(await lingerEnabled()))

@@ -17,7 +17,7 @@ const help = `
     status      Show whether the bridge's service is installed and running
     run         Run the bridge in the foreground
     ask <text>  Send a question from the current T3 Code thread (what signal-ask runs)
-    uninstall   Stop the bridge and remove its service. Keeps your config and Signal keys.
+    uninstall   Stop the bridge and remove its service, keeping your config and Signal keys
 
   Options:
     --help      Show this help
@@ -26,16 +26,18 @@ const help = `
 
 async function printStatus() {
   const status = await serviceStatus();
+  process.exitCode = status === "running" ? 0 : 1;
+
   console.log(`Bridge: ${status}`);
   if (status === "not installed") {
     console.log("Run `npx t3-signal-bridge install` to set it up.");
-  } else {
-    console.log(`Unit: ${paths.unit}`);
-    console.log(`Logs: journalctl --user -u ${serviceName}`);
-    if (status === "stopped")
-      console.log(`Run \`systemctl --user start ${serviceName}\` to start it.`);
+    return;
   }
-  process.exitCode = status === "running" ? 0 : 1;
+
+  console.log(`Unit: ${paths.unit}`);
+  console.log(`Logs: journalctl --user -u ${serviceName}`);
+  if (status === "stopped")
+    console.log(`Run \`systemctl --user start ${serviceName}\` to start it.`);
 }
 
 async function runCommand(command: string) {

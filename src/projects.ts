@@ -26,6 +26,7 @@ export function toWorkspaces(rows: z.infer<typeof rowsSchema>): Workspaces {
 async function queryProjectRows(file: string) {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(file, { readOnly: true });
+
   try {
     return db
       .prepare(

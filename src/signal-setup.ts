@@ -8,13 +8,9 @@ import { dataDirArgs, signalCliArgs } from "./signal.ts";
 import { parseJson } from "./util.ts";
 import { which } from "./which.ts";
 
-const contactsSchema = z.array(
-  z.object({ number: z.string().nullish(), uuid: z.string().nullish() }),
-);
-
 export async function findSignalCli(configured?: string) {
   for (const candidate of [configured, paths.signalCliBinary, which("signal-cli")]) {
-    if (candidate && (await tryRun(candidate, ["--version"])) !== undefined) return candidate;
+    if (candidate && (await exec(candidate, ["--version"])).ok) return candidate;
   }
   return undefined;
 }
@@ -30,31 +26,39 @@ export async function downloadNative() {
   const response = await fetch("https://api.github.com/repos/AsamK/signal-cli/releases/latest");
   if (!response.ok)
     throw new Error(`GitHub returned ${response.status} for the latest signal-cli release`);
+
   const release = releaseSchema.parse(await response.json());
   const asset = release.assets.find((candidate) => candidate.name.endsWith("-Linux-native.tar.gz"));
   if (!asset) throw new Error(`signal-cli ${release.tag_name} has no Linux native build`);
 
-  const archive = join(tmpdir(), asset.name);
   const download = await fetch(asset.browser_download_url);
   if (!download.ok || !download.body)
     throw new Error(`Downloading ${asset.name} failed: ${download.status}`);
+
+  const archive = join(tmpdir(), asset.name);
+  const binDir = dirname(paths.signalCliBinary);
   try {
     await writeFile(archive, download.body);
-    await mkdir(dirname(paths.signalCliBinary), { recursive: true });
-    await run("tar", ["xzf", archive, "-C", dirname(paths.signalCliBinary)]);
+    await mkdir(binDir, { recursive: true });
+    await run("tar", ["xzf", archive, "-C", binDir]);
   } finally {
     await rm(archive, { force: true });
   }
+
   return release.tag_name;
 }
+
+const contactsSchema = z.array(
+  z.object({ number: z.string().nullish(), uuid: z.string().nullish() }),
+);
 
 export function signalAccount(binary: string, account: string) {
   const signalCli = (...args: string[]) => run(binary, signalCliArgs(account, ...args));
 
   return {
     isRegistered: async () => {
-      const result = await exec(binary, [...dataDirArgs, "listAccounts"]);
-      return result.ok && result.stdout.includes(account);
+      const accounts = await tryRun(binary, [...dataDirArgs, "listAccounts"]);
+      return accounts?.includes(account) ?? false;
     },
     register: (captcha: string, voice: boolean) =>
       signalCli("register", "--captcha", captcha, ...(voice ? ["--voice"] : [])),

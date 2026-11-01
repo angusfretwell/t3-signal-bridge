@@ -36,9 +36,9 @@ export function createT3(binary: string) {
     const result = await exec(binary, args, input);
     const parsed = schema.safeParse(parseJson(result.stdout));
     if (parsed.success) return parsed.data;
-    throw new Error(
-      `t3 ${args.slice(0, 2).join(" ")} exited ${result.code}: ${(result.stderr || result.stdout).trim().slice(-500)}`,
-    );
+
+    const output = (result.stderr || result.stdout).trim().slice(-500);
+    throw new Error(`t3 ${args.slice(0, 2).join(" ")} exited ${result.code}: ${output}`);
   }
 
   return {
@@ -60,8 +60,10 @@ export function createT3(binary: string) {
     sendToThread: (threadId: string, message: string) =>
       t3(runResultSchema, ["thread", "send", "--json", "--wait", threadId, "-"], message),
 
-    threadTitle: async (threadId: string) =>
-      (await t3(threadSchema, ["thread", "show", "--json", "--messages", "0", threadId])).thread
-        .title,
+    threadTitle: async (threadId: string) => {
+      const args = ["thread", "show", "--json", "--messages", "0", threadId];
+      const { thread } = await t3(threadSchema, args);
+      return thread.title;
+    },
   };
 }

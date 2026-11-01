@@ -10,6 +10,8 @@ export type TextStyle = "BOLD" | "ITALIC" | "STRIKETHROUGH" | "MONOSPACE";
 export type StyleRange = { start: number; length: number; style: TextStyle };
 type Outgoing = { text: string; styles?: StyleRange[]; attachments?: string[] };
 
+type PendingCall = { resolve: (result: unknown) => void; reject: (error: Error) => void };
+
 const envelopeSchema = z.object({
   source: z.string().nullish(),
   sourceNumber: z.string().nullish(),
@@ -34,8 +36,9 @@ export function parseIncoming(line: unknown, ownerIds: string[]): Incoming | und
 
   const { envelope } = notification.data.params;
   const senders = [envelope.source, envelope.sourceNumber, envelope.sourceUuid];
+  const fromOwner = senders.some((sender) => sender && ownerIds.includes(sender));
   const text = envelope.dataMessage?.message;
-  if (!senders.some((sender) => sender && ownerIds.includes(sender)) || !text) return undefined;
+  if (!fromOwner || !text) return undefined;
 
   return {
     timestamp: envelope.timestamp,
@@ -68,32 +71,30 @@ export function connectSignal(options: {
   ownerUuid?: string;
   onMessage: (message: Incoming) => void;
 }) {
-  const { botNumber, owner } = options;
-  const ownerIds = [owner, options.ownerUuid].filter((id): id is string => !!id);
-  const child = spawn(options.binary, signalCliArgs(botNumber, "jsonRpc"), {
+  const { binary, botNumber, owner, ownerUuid, onMessage } = options;
+  const ownerIds = ownerUuid ? [owner, ownerUuid] : [owner];
+  const pending = new Map<string, PendingCall>();
+  let nextId = 0;
+
+  const child = spawn(binary, signalCliArgs(botNumber, "jsonRpc"), {
     stdio: ["pipe", "pipe", "inherit"],
   });
   process.on("exit", () => child.kill());
-  const pending = new Map<
-    string,
-    { resolve: (result: unknown) => void; reject: (error: Error) => void }
-  >();
-  let nextId = 0;
 
   createInterface({ input: child.stdout }).on("line", (line) => {
     const json = parseJson(line);
-    if (json === undefined) return;
     const response = responseSchema.safeParse(json);
     if (response.success) {
-      const request = pending.get(response.data.id);
-      pending.delete(response.data.id);
-      if (response.data.error)
-        request?.reject(new Error(`signal-cli: ${response.data.error.message}`));
-      else request?.resolve(response.data.result);
+      const { id, result, error } = response.data;
+      const request = pending.get(id);
+      pending.delete(id);
+      if (error) request?.reject(new Error(`signal-cli: ${error.message}`));
+      else request?.resolve(result);
       return;
     }
+
     const message = parseIncoming(json, ownerIds);
-    if (message) options.onMessage(message);
+    if (message) onMessage(message);
   });
 
   const exited = new Promise<number | null>((resolve) => {

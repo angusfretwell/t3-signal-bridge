@@ -11,10 +11,11 @@ import { createT3, findT3 } from "./t3.ts";
 import { errorMessage } from "./util.ts";
 
 export function runBridge(config: Config) {
-  const store = new ThreadStore(paths.threads);
   const t3Binary = findT3(config.t3Bin);
   if (!t3Binary) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
+
   const t3 = createT3(t3Binary);
+  const store = new ThreadStore(paths.threads);
   const signal = connectSignal({
     binary: config.signalCli,
     botNumber: config.botNumber,
@@ -50,6 +51,7 @@ export function runBridge(config: Config) {
     }
 
     await signal.react("👀", message.timestamp);
+
     const result =
       target.kind === "reply"
         ? await t3.sendToThread(target.threadId, target.text)
@@ -59,8 +61,8 @@ export function runBridge(config: Config) {
 
   serveAsk(config.port, (threadId, question) => sendFromThread(threadId, `❓ ${question}`));
 
-  for (const signalName of ["SIGTERM", "SIGINT"] as const)
-    process.on(signalName, () => process.exit(0));
+  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGINT", () => process.exit(0));
   void signal.exited.then((code) => {
     console.error(`signal-cli exited with code ${code}`);
     process.exit(1);

@@ -11,6 +11,7 @@ export function route(
 ): Route {
   const text = message.text.trim();
   if (message.quotedTimestamp === undefined) return { kind: "start", text };
+
   const threadId = threadFor(message.quotedTimestamp);
   return threadId ? { kind: "reply", threadId, text } : { kind: "unknown-quote" };
 }
@@ -23,12 +24,12 @@ export function pickWorkspace(
   defaultProject?: string,
 ) {
   const [, prefix, rest] = projectPrefix.exec(text) ?? [];
-  const named =
-    prefix && projects.find((project) => project.name.toLowerCase() === prefix.toLowerCase());
+  const named = prefix && projects.find((project) => project.name === prefix.toLowerCase());
   if (named && rest) return { path: named.path, isProject: true, text: rest.trim() };
 
   const fallback = projects.find((project) => project.path === defaultProject);
   if (fallback) return { path: fallback.path, isProject: true, text };
+
   if (scratchPath) return { path: scratchPath, isProject: false, text };
   throw new Error('T3 Code has no "No project" space. Start the message with a project name.');
 }

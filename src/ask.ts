@@ -21,27 +21,32 @@ export function serveAsk(
       response.writeHead(404).end();
       return;
     }
+
     const mediaType = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
     if (mediaType !== "application/json") {
       sendJson(response, 415, { error: "Send the question as application/json." });
       return;
     }
+
     const body = await text(request).catch(() => undefined);
     if (body === undefined) {
       sendJson(response, 400, { error: "Couldn't read the request body." });
       return;
     }
-    const ask = askSchema.safeParse(parseJson(body));
-    if (!ask.success) {
-      sendJson(response, 400, { error: ask.error.message });
+
+    const parsed = askSchema.safeParse(parseJson(body));
+    if (!parsed.success) {
+      sendJson(response, 400, { error: parsed.error.message });
       return;
     }
+
     try {
-      await onQuestion(ask.data.threadId, ask.data.question);
+      await onQuestion(parsed.data.threadId, parsed.data.question);
     } catch (error) {
       sendJson(response, 502, { error: errorMessage(error) });
       return;
     }
+
     sendJson(response, 200, { sent: true });
   });
 
@@ -57,15 +62,16 @@ function fetchFailure(error: unknown) {
 
 export async function ask(args: string[]) {
   const threadId = process.env.T3CODE_THREAD_ID;
+  if (!threadId)
+    throw new Error("signal-ask only works inside a T3 Code thread: T3CODE_THREAD_ID is not set.");
+
   const question = (
     args.join(" ") || (process.stdin.isTTY ? "" : await text(process.stdin))
   ).trim();
+  if (!question) throw new Error('Usage: signal-ask "<question>" (or pipe the question on stdin)');
+
   const port = readConfig()?.port ?? defaultPort;
   const bridgeUrl = process.env.SIGNAL_BRIDGE_URL ?? `http://${host}:${port}`;
-
-  if (!threadId)
-    throw new Error("signal-ask only works inside a T3 Code thread: T3CODE_THREAD_ID is not set.");
-  if (!question) throw new Error('Usage: signal-ask "<question>" (or pipe the question on stdin)');
 
   let failure: string | undefined;
   try {

@@ -4,7 +4,7 @@ import { exec, run, tryRun } from "./exec.ts";
 import { paths, serviceName } from "./paths.ts";
 import { writeFileIn } from "./util.ts";
 
-const shellQuote = (value: string) => `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
+const shellQuote = (value: string) => `"${value.replace(/["\\$`]/g, "\\$&")}"`;
 const systemdQuote = (value: string) =>
   `"${value.replace(/["\\]/g, "\\$&").replace(/[$%]/g, "$&$&")}"`;
 
@@ -49,9 +49,14 @@ export async function startService() {
   await run("systemctl", ["--user", "restart", serviceName]);
 }
 
+export async function stopService() {
+  await systemctl("stop", serviceName);
+}
+
 export async function update(appSource: string) {
   if (!existsSync(paths.app))
     throw new Error("The bridge isn't installed. Run `npx t3-signal-bridge install` first.");
+
   deploy(appSource);
   if (existsSync(paths.unit)) await startService();
 }
@@ -62,16 +67,14 @@ export async function undeploy() {
     rmSync(paths.unit);
     await systemctl("daemon-reload");
   }
+
   rmSync(paths.askShim, { force: true });
   rmSync(dirname(paths.app), { recursive: true, force: true });
 }
 
-export async function stopService() {
-  await systemctl("stop", serviceName);
-}
-
 export async function serviceStatus() {
   if (!existsSync(paths.unit)) return "not installed";
+
   const state = await tryRun("systemctl", ["--user", "is-active", serviceName]);
   return state === "active" ? "running" : "stopped";
 }

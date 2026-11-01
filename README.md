@@ -21,7 +21,7 @@ Run the installer on the machine where T3 Code runs:
 npx t3-signal-bridge install
 ```
 
-The installer asks for the bot's number, your Signal number, and the project that new threads start in. It registers the bot with Signal, sends you a test message, and starts the bridge as a background service.
+The installer asks for the bot's number, your Signal number and the project that new threads start in. It registers the bot with Signal, sends you a test message and starts the bridge as a background service.
 
 On your phone, save the bot as a contact so that its messages notify you.
 

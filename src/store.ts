@@ -18,6 +18,7 @@ export class ThreadStore {
       if (this.threads.size <= maxEntries) break;
       this.threads.delete(oldest);
     }
+
     writeFileIn(this.file, JSON.stringify([...this.threads]));
   }
 }

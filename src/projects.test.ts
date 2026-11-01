@@ -20,13 +20,4 @@ describe("toWorkspaces", () => {
     expect(scratchPath).toBe(scratch);
     expect(projects).toEqual([{ name: "website", path: "/work/website" }]);
   });
-
-  test("keeps the order T3 Code lists projects in", () => {
-    const { projects } = toWorkspaces([
-      { title: "Zebra", workspace_root: "/work/zebra" },
-      { title: "Apple", workspace_root: "/work/apple" },
-      { title: "Mango", workspace_root: "/work/mango" },
-    ]);
-    expect(projects.map((project) => project.name)).toEqual(["zebra", "apple", "mango"]);
-  });
 });

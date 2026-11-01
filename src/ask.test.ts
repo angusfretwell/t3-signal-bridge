@@ -7,12 +7,14 @@ import { serveAsk } from "./ask.ts";
 describe("serveAsk", () => {
   const onQuestion = vi.fn<(threadId: string, question: string) => Promise<void>>(async () => {});
   let server: Server;
+  let port: number;
   let url: string;
 
   beforeAll(async () => {
     server = serveAsk(0, onQuestion);
     await once(server, "listening");
-    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    port = (server.address() as AddressInfo).port;
+    url = `http://127.0.0.1:${port}`;
   });
 
   afterAll(() => {
@@ -74,7 +76,7 @@ describe("serveAsk", () => {
     const unhandled = vi.fn();
     process.on("unhandledRejection", unhandled);
     const connected = once(server, "connection");
-    const client = connect((server.address() as AddressInfo).port, "127.0.0.1");
+    const client = connect(port, "127.0.0.1");
     const [serverSocket] = await connected;
     const serverClosed = new Promise((resolve) => serverSocket.once("close", resolve));
     client.end(
