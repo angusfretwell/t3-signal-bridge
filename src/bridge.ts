@@ -18,7 +18,7 @@ function describe(result: RunResult) {
 const maxTitleLength = 40;
 
 export function threadHeader(title: string) {
-  const characters = [...title];
+  const characters = Array.from(new Intl.Segmenter().segment(title), ({ segment }) => segment);
   if (characters.length <= maxTitleLength) return `🧵 ${title}`;
   return `🧵 ${characters
     .slice(0, maxTitleLength - 1)

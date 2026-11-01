@@ -11,4 +11,8 @@ describe("threadHeader", () => {
       threadHeader("just testing signal integration out, don’t do anything, just reply to me"),
     ).toBe("🧵 just testing signal integration out, do…");
   });
+
+  test("keeps emoji whole when cutting", () => {
+    expect(threadHeader(`${"a".repeat(38)}👩‍💻 and more`)).toBe(`🧵 ${"a".repeat(38)}👩‍💻…`);
+  });
 });
