@@ -183,10 +183,7 @@ export async function install(appSource: string) {
   else botName = await register(account);
 
   await step("Sending you a test message", "Test message sent", () =>
-    account.send(
-      owner,
-      `👋 ${botName} is connected.\n\nSend a message here to start a T3 Code thread.`,
-    ),
+    account.send(owner, `👋 ${botName} is connected.\n\nSend a message here to start a thread.`),
   );
   const ownerUuid = await account.uuidOf(owner).catch(() => undefined);
 
