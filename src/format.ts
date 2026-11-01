@@ -78,8 +78,11 @@ export function toSignal(markdown: string): SignalMessage {
       if (!first) write(separator);
       const afterSeparator = text.length;
       renderChild(child);
-      if (text.length === afterSeparator) text = text.slice(0, before);
-      else first = false;
+      if (text.slice(afterSeparator).trim()) first = false;
+      else {
+        text = text.slice(0, before);
+        while ((styles.at(-1)?.start ?? -1) >= before) styles.pop();
+      }
     }
   }
 

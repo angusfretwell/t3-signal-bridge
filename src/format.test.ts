@@ -40,6 +40,14 @@ describe("toSignal", () => {
     });
   });
 
+  test("drops blank code blocks", () => {
+    expect(toSignal("Before\n\n```\n   \n```\n\nAfter")).toEqual({
+      text: "Before\n\nAfter",
+      styles: [],
+      attachments: [],
+    });
+  });
+
   test("writes link targets after their labels", () => {
     expect(
       toSignal("See [the PR](https://github.com/a/b/pull/1) or https://example.com.").text,
@@ -83,6 +91,19 @@ describe("toSignal", () => {
     });
     expect(toSignal(`![shot](${image.replace(" ", "%20")})`).attachments).toEqual([image]);
     expect(toSignal(`![shot](file://${image.replace(" ", "%20")})`).attachments).toEqual([image]);
+  });
+
+  test("drops the gap left by images on neighbouring lines", () => {
+    const dir = mkdtempSync(join(tmpdir(), "format-"));
+    const [one, two] = [join(dir, "one.png"), join(dir, "two.png")];
+    writeFileSync(one, "");
+    writeFileSync(two, "");
+
+    expect(toSignal(`Before:\n\n![one](${one})\n![two](${two})\n\nAfter.`)).toEqual({
+      text: "Before:\n\nAfter.",
+      styles: [],
+      attachments: [one, two],
+    });
   });
 
   test("links images it can't attach", () => {
