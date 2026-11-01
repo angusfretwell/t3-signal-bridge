@@ -1,13 +1,11 @@
 # T3 Code Signal Bridge
 
-Start, answer and follow [T3 Code](https://github.com/pingdotgg/t3code) threads from Signal:
+An unofficial bridge to start, answer and follow [T3 Code](https://github.com/pingdotgg/t3code) threads from Signal:
 
 - Message the bot to start a thread.
 - Quote-reply to a bot message to answer its thread.
 - Bot reacts 👀 when it gets your message and replies when its thread finishes.
 - Let agents ask you questions and wait for your answer.
-
-This is not an official T3 Code project.
 
 ## Installation
 
@@ -27,12 +25,6 @@ The installer asks for the bot's number, your Signal number, and the project tha
 
 On your phone, save the bot as a contact so that its messages notify you.
 
-To let agents ask you questions, add this line to your AGENTS.md or to a scheduled task's prompt:
-
-```md
-If you can't continue without the owner's decision, run `signal-ask "<question>"` and end your turn. Their reply arrives as your next message.
-```
-
 To change your settings, run `npx t3-signal-bridge install` again.
 
 ## Usage
@@ -44,6 +36,12 @@ api: bump the dependencies
 ```
 
 The project name is its T3 Code title in lowercase, with dashes for spaces, so "My API" becomes `my-api`.
+
+To let agents ask you questions, add this line to your AGENTS.md or to a scheduled task's prompt:
+
+```md
+If you can't continue without the owner's decision, run `signal-ask "<question>"` and end your turn. Their reply arrives as your next message.
+```
 
 ## Reference
 
