@@ -133,6 +133,7 @@ async function register(commands: ReturnType<typeof signalCliCommands>) {
     await p.text({ message: "Bot's Signal profile name", initialValue: "T3 Code" }),
   );
   await step("Setting the profile name", "Profile name set", () => commands.setName(name));
+  return name;
 }
 
 export async function install(appSource: string) {
@@ -181,19 +182,21 @@ export async function install(appSource: string) {
 
   stopService();
   const commands = signalCliCommands(signalCli, botNumber);
+  let botName = existing?.botName ?? "T3 Code";
   if (await commands.isRegistered()) p.log.success(`${botNumber} is already registered`);
-  else await register(commands);
+  else botName = await register(commands);
 
   await step("Sending you a test message", "Test message sent", () =>
     commands.send(
       owner,
-      "t3-signal-bridge is connected. Send a message here to start a T3 Code thread.",
+      `👋 ${botName} is connected.\n\nSend a message here to start a T3 Code thread.`,
     ),
   );
   const ownerUuid = await commands.uuidOf(owner).catch(() => undefined);
 
   writeConfig({
     botNumber,
+    botName,
     owner,
     ownerUuid,
     signalCli,

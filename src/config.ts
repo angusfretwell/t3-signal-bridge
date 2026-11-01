@@ -5,6 +5,7 @@ import { paths } from "./paths.ts";
 
 export const configSchema = z.object({
   botNumber: z.string().min(1),
+  botName: z.string().optional(),
   owner: z.string().min(1),
   ownerUuid: z.string().optional(),
   signalCli: z.string().min(1),

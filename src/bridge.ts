@@ -38,7 +38,7 @@ export function runBridge(config: Config) {
 
   async function sendFromThread(threadId: string, body: string) {
     const title = await t3.threadTitle(threadId).catch(() => threadId);
-    store.remember(await signal.send(`${title}\n\n${body}`), threadId);
+    store.remember(await signal.send(`🧵 ${title}\n\n${body}`), threadId);
   }
 
   async function run(
