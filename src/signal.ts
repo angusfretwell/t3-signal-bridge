@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { z } from "zod";
-import type { SignalMessage } from "./format.ts";
 import { paths } from "./paths.ts";
 import { parseJson } from "./util.ts";
 
 export type Incoming = { timestamp: number; text: string; quotedTimestamp?: number };
+
+export type TextStyle = "BOLD" | "ITALIC" | "STRIKETHROUGH" | "MONOSPACE";
+export type StyleRange = { start: number; length: number; style: TextStyle };
+export type Outgoing = { text: string; styles?: StyleRange[]; attachments?: string[] };
 
 const envelopeSchema = z.object({
   source: z.string().nullish(),
@@ -57,11 +60,12 @@ export const signalCliArgs = (account: string, ...args: string[]) => [
   ...args,
 ];
 
-export function createSignal(options: {
+export function connectSignal(options: {
   binary: string;
   botNumber: string;
   owner: string;
   ownerUuid?: string;
+  onMessage: (message: Incoming) => void;
 }) {
   const { botNumber, owner } = options;
   const ownerIds = [owner, options.ownerUuid].filter((id): id is string => !!id);
@@ -73,7 +77,6 @@ export function createSignal(options: {
     string,
     { resolve: (result: unknown) => void; reject: (error: Error) => void }
   >();
-  const listeners: ((message: Incoming) => void)[] = [];
   let nextId = 0;
 
   createInterface({ input: child.stdout }).on("line", (line) => {
@@ -89,7 +92,7 @@ export function createSignal(options: {
       return;
     }
     const message = parseIncoming(json, ownerIds);
-    if (message) for (const listener of listeners) listener(message);
+    if (message) options.onMessage(message);
   });
 
   const exited = new Promise<number | null>((resolve) => {
@@ -110,11 +113,7 @@ export function createSignal(options: {
   }
 
   return {
-    send: async ({
-      text,
-      styles = [],
-      attachments = [],
-    }: Partial<SignalMessage> & { text: string }) =>
+    send: async ({ text, styles = [], attachments = [] }: Outgoing) =>
       sendResultSchema.parse(
         await call("send", {
           recipient: [owner],
@@ -125,7 +124,6 @@ export function createSignal(options: {
       ).timestamp,
     react: (emoji: string, targetTimestamp: number) =>
       call("sendReaction", { recipient: [owner], emoji, targetAuthor: owner, targetTimestamp }),
-    listen: (listener: (message: Incoming) => void) => listeners.push(listener),
     exited,
   };
 }

@@ -1,14 +1,12 @@
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { List, ListItem, Nodes, Table } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { toString } from "mdast-util-to-string";
 import { gfm } from "micromark-extension-gfm";
-
-export type TextStyle = "BOLD" | "ITALIC" | "STRIKETHROUGH" | "MONOSPACE";
-export type StyleRange = { start: number; length: number; style: TextStyle };
-export type SignalMessage = { text: string; styles: StyleRange[]; attachments: string[] };
+import type { StyleRange, TextStyle } from "./signal.ts";
+import type { RunResult } from "./t3.ts";
 
 const inlineStyles: Partial<Record<Nodes["type"], TextStyle>> = {
   strong: "BOLD",
@@ -17,10 +15,18 @@ const inlineStyles: Partial<Record<Nodes["type"], TextStyle>> = {
   heading: "BOLD",
 };
 
+const isFile = (path: string) => statSync(path, { throwIfNoEntry: false })?.isFile();
+
 function localFile(url: string) {
-  const path = url.startsWith("file:") ? fileURLToPath(url) : url;
-  if (!path.startsWith("/")) return undefined;
-  return [path, decodeURIComponent(path)].find((candidate) => existsSync(candidate));
+  try {
+    const path = url.startsWith("file:") ? fileURLToPath(url) : url;
+    if (!path.startsWith("/")) return undefined;
+    if (isFile(path)) return path;
+    const decoded = decodeURIComponent(path);
+    return isFile(decoded) ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function tableLines(table: Table) {
@@ -43,7 +49,7 @@ function listMarker(item: ListItem, number: number | undefined) {
   return number === undefined ? "• " : `${number}. `;
 }
 
-export function toSignal(markdown: string): SignalMessage {
+export function toSignal(markdown: string) {
   let text = "";
   const styles: StyleRange[] = [];
   const attachments: string[] = [];
@@ -70,14 +76,14 @@ export function toSignal(markdown: string): SignalMessage {
   function blocks<T extends Nodes>(
     children: T[],
     separator: string,
-    renderChild: (child: T) => void = render,
+    renderChild: (child: T, index: number) => void = render,
   ) {
     let first = true;
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       const before = text.length;
       if (!first) write(separator);
       const afterSeparator = text.length;
-      renderChild(child);
+      renderChild(child, index);
       if (text.slice(afterSeparator).trim()) first = false;
       else {
         text = text.slice(0, before);
@@ -88,8 +94,8 @@ export function toSignal(markdown: string): SignalMessage {
 
   function list(node: List) {
     const start = node.start ?? 1;
-    blocks(node.children, node.spread ? "\n\n" : "\n", (item) => {
-      const number = node.ordered ? start + node.children.indexOf(item) : undefined;
+    blocks(node.children, node.spread ? "\n\n" : "\n", (item, index) => {
+      const number = node.ordered ? start + index : undefined;
       indented(listMarker(item, number), () => blocks(item.children, item.spread ? "\n\n" : "\n"));
     });
   }
@@ -154,4 +160,30 @@ export function toSignal(markdown: string): SignalMessage {
   });
   render(tree);
   return { text, styles, attachments };
+}
+
+const maxTitleLength = 40;
+
+export function threadHeader(title: string) {
+  const characters = Array.from(new Intl.Segmenter().segment(title), ({ segment }) => segment);
+  if (characters.length <= maxTitleLength) return `🧵 ${title}`;
+  return `🧵 ${characters
+    .slice(0, maxTitleLength - 1)
+    .join("")
+    .trimEnd()}…`;
+}
+
+export function threadMessage(title: string, markdown: string) {
+  const header = `${threadHeader(title)}\n\n`;
+  const { text, styles, attachments } = toSignal(markdown);
+  return {
+    text: header + text,
+    styles: styles.map((range) => ({ ...range, start: range.start + header.length })),
+    attachments,
+  };
+}
+
+export function runReport(result: RunResult) {
+  if (result.status === "completed") return result.reply || "(no reply)";
+  return `Run ${result.status}${result.error ? `: ${result.error}` : ""}${result.reply ? `\n\n${result.reply}` : ""}`;
 }

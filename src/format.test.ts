@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { toSignal } from "./format.ts";
+import { runReport, threadHeader, threadMessage, toSignal } from "./format.ts";
 
 function styledText(markdown: string) {
   const { text, styles } = toSignal(markdown);
@@ -114,11 +114,74 @@ describe("toSignal", () => {
     });
   });
 
+  test("links image paths it can't decode", () => {
+    expect(toSignal("![odd](/nope/100%.png) ![remote](file://host/c.png)")).toEqual({
+      text: "odd (/nope/100%.png) remote (file://host/c.png)",
+      styles: [],
+      attachments: [],
+    });
+  });
+
+  test("attaches files whose names contain a literal %", () => {
+    const image = join(mkdtempSync(join(tmpdir(), "format-")), "100%.png");
+    writeFileSync(image, "");
+    expect(toSignal(`![full](${image})`).attachments).toEqual([image]);
+  });
+
+  test("doesn't attach directories", () => {
+    const dir = mkdtempSync(join(tmpdir(), "format-"));
+    expect(toSignal(`![dir](${dir})`)).toEqual({
+      text: `dir (${dir})`,
+      styles: [],
+      attachments: [],
+    });
+  });
+
   test("leaves plain text alone", () => {
     expect(toSignal("Done. Nothing to report.\nSecond line.")).toEqual({
       text: "Done. Nothing to report.\nSecond line.",
       styles: [],
       attachments: [],
     });
+  });
+});
+
+describe("threadHeader", () => {
+  test("keeps short titles whole", () => {
+    expect(threadHeader("Bump deps")).toBe("🧵 Bump deps");
+  });
+
+  test("cuts long titles to 40 characters", () => {
+    expect(
+      threadHeader("just testing signal integration out, don’t do anything, just reply to me"),
+    ).toBe("🧵 just testing signal integration out, do…");
+  });
+
+  test("keeps emoji whole when cutting", () => {
+    expect(threadHeader(`${"a".repeat(38)}👩‍💻 and more`)).toBe(`🧵 ${"a".repeat(38)}👩‍💻…`);
+  });
+});
+
+describe("threadMessage", () => {
+  test("puts the thread header first and keeps styles on their text", () => {
+    const { text, styles } = threadMessage("👩‍💻 Fix login", "I **fixed** it");
+    expect(text).toBe("🧵 👩‍💻 Fix login\n\nI fixed it");
+    expect(styles.map(({ start, length }) => text.slice(start, start + length))).toEqual(["fixed"]);
+  });
+});
+
+describe("runReport", () => {
+  test("reports a completed run as its reply", () => {
+    expect(runReport({ threadId: "t", status: "completed", reply: "Done." })).toBe("Done.");
+  });
+
+  test("says when a completed run didn't reply", () => {
+    expect(runReport({ threadId: "t", status: "completed", reply: null })).toBe("(no reply)");
+  });
+
+  test("leads a failed run with its status and error, then the reply", () => {
+    expect(
+      runReport({ threadId: "t", status: "failed", error: "out of tokens", reply: "Half done." }),
+    ).toBe("Run failed: out of tokens\n\nHalf done.");
   });
 });
