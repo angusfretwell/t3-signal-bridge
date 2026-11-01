@@ -33,10 +33,46 @@ To let agents ask you questions, add this line to your AGENTS.md or to a schedul
 If you can't continue without the owner's decision, run `signal-ask "<question>"` and end your turn. Their reply arrives as your next message.
 ```
 
-To check that the bridge is running, run `npx t3-signal-bridge status`.
-
 To change your settings, run `npx t3-signal-bridge install` again.
 
-To update the bridge, run `npx t3-signal-bridge@latest update`.
+## Usage
 
-To remove the bridge, run `npx t3-signal-bridge uninstall`.
+### Check the bridge
+
+```sh
+npx t3-signal-bridge status
+```
+
+Shows whether the bridge's service is installed and running, and where its logs are.
+
+### Update
+
+```sh
+npx t3-signal-bridge@latest update
+```
+
+Installs the latest version and restarts the bridge.
+
+### Ask from a thread
+
+```sh
+signal-ask "<question>"
+```
+
+Sends a question from the T3 Code thread it runs in. Pipe longer questions on stdin.
+
+### Run in the foreground
+
+```sh
+npx t3-signal-bridge run
+```
+
+Runs the bridge in your terminal, for machines without systemd. Stop the service first if it's running.
+
+### Uninstall
+
+```sh
+npx t3-signal-bridge uninstall
+```
+
+Stops the bridge and removes its service. Your config and the bot's Signal keys stay, so `install` can set it up again without registering the number.
