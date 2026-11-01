@@ -17,4 +17,5 @@ jobs:
         with:
           node-version: "24"
           cache: true
+      - run: vp pack
       - run: npm publish
