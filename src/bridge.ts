@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { z } from "zod";
 import type { Config } from "./config.ts";
+import { toSignal } from "./format.ts";
 import { paths } from "./paths.ts";
 import { defaultBranch, listProjects, type Project } from "./projects.ts";
 import { type Route, route } from "./route.ts";
@@ -49,7 +50,14 @@ export function runBridge(config: Config) {
 
   async function sendFromThread(threadId: string, body: string) {
     const title = await t3.threadTitle(threadId).catch(() => threadId);
-    store.remember(await signal.send(`${threadHeader(title)}\n\n${body}`), threadId);
+    const header = `${threadHeader(title)}\n\n`;
+    const { text, styles, attachments } = toSignal(body);
+    const timestamp = await signal.send({
+      text: header + text,
+      styles: styles.map((range) => ({ ...range, start: range.start + header.length })),
+      attachments,
+    });
+    store.remember(timestamp, threadId);
   }
 
   async function run(
@@ -78,9 +86,9 @@ export function runBridge(config: Config) {
       projects.map((project) => project.name),
     );
     if (target.kind === "unknown-quote") {
-      await signal.send(
-        "I don't know which thread that message belongs to. Send it without quoting to start a new thread.",
-      );
+      await signal.send({
+        text: "I don't know which thread that message belongs to. Send it without quoting to start a new thread.",
+      });
       return;
     }
 
@@ -93,7 +101,7 @@ export function runBridge(config: Config) {
     handle(message).catch((error) => {
       console.error(error);
       signal
-        .send(`⚠️ ${error instanceof Error ? error.message : String(error)}`)
+        .send({ text: `⚠️ ${error instanceof Error ? error.message : String(error)}` })
         .catch(console.error);
     });
   });

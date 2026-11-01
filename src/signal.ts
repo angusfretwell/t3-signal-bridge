@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { z } from "zod";
+import type { SignalMessage } from "./format.ts";
 
 export type Incoming = { timestamp: number; text: string; quotedTimestamp?: number };
 
@@ -104,8 +105,19 @@ export function createSignal(options: {
   }
 
   return {
-    send: async (message: string) =>
-      sendResultSchema.parse(await call("send", { recipient: [owner], message })).timestamp,
+    send: async ({
+      text,
+      styles = [],
+      attachments = [],
+    }: Partial<SignalMessage> & { text: string }) =>
+      sendResultSchema.parse(
+        await call("send", {
+          recipient: [owner],
+          message: text,
+          textStyle: styles.map(({ start, length, style }) => `${start}:${length}:${style}`),
+          attachment: attachments,
+        }),
+      ).timestamp,
     react: (emoji: string, targetTimestamp: number) =>
       call("sendReaction", { recipient: [owner], emoji, targetAuthor: owner, targetTimestamp }),
     listen: (listener: (message: Incoming) => void) => listeners.push(listener),
