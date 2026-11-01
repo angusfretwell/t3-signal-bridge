@@ -1,4 +1,4 @@
-import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { exec, run, tryRun } from "./exec.ts";
 import { paths, serviceName } from "./paths.ts";
@@ -36,7 +36,8 @@ export async function hasSystemd() {
 }
 
 export function deploy(appSource: string) {
-  cpSync(appSource, paths.app);
+  mkdirSync(dirname(paths.app), { recursive: true });
+  copyFileSync(appSource, paths.app);
   writeFileIn(paths.askShim, renderAskShim(process.execPath, paths.app));
   chmodSync(paths.askShim, 0o755);
 }
