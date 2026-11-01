@@ -69,6 +69,14 @@ export function serviceStatus() {
   return result.stdout.trim() === "active" ? "running" : "stopped";
 }
 
+export function update(appSource: string) {
+  if (!existsSync(paths.app))
+    throw new Error("The bridge isn't installed. Run `npx t3-signal-bridge install` first.");
+  copyApp(appSource);
+  installAskShim(process.execPath);
+  if (existsSync(paths.unit)) installService(process.execPath);
+}
+
 export function uninstall() {
   if (existsSync(paths.unit)) {
     spawnSync("systemctl", ["--user", "disable", "--now", serviceName], { stdio: "ignore" });

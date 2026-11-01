@@ -37,4 +37,6 @@ To check that the bridge is running, run `npx t3-signal-bridge status`.
 
 To change your settings, run `npx t3-signal-bridge install` again.
 
+To update the bridge, run `npx t3-signal-bridge@latest update`.
+
 To remove the bridge, run `npx t3-signal-bridge uninstall`.

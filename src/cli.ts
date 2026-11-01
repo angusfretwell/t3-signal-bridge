@@ -1,29 +1,47 @@
 import { fileURLToPath } from "node:url";
+import meow from "meow";
 import packageJson from "../package.json" with { type: "json" };
 import { ask } from "./ask.ts";
 import { runBridge } from "./bridge.ts";
 import { loadConfig } from "./config.ts";
 import { install } from "./install.ts";
 import { paths, serviceName } from "./paths.ts";
-import { serviceStatus, uninstall } from "./service.ts";
+import { serviceStatus, uninstall, update } from "./service.ts";
 
-const help = `Usage: t3-signal-bridge <command>
+const cli = meow(
+  `
+  Usage: t3-signal-bridge <command>
 
-Commands:
-  install     Set up signal-cli, register the bot's number and start the bridge
-  status      Show whether the bridge's service is installed and running
-  run         Run the bridge in the foreground
-  ask <text>  Send a question from the current T3 Code thread (what signal-ask runs)
-  version     Show the installed version
-  uninstall   Stop the bridge and remove its service. Keeps your config and Signal keys.
-`;
+  Commands:
+    install     Set up signal-cli, register the bot's number and start the bridge
+    update      Replace the installed bridge with this version and restart it
+    status      Show whether the bridge's service is installed and running
+    run         Run the bridge in the foreground
+    ask <text>  Send a question from the current T3 Code thread (what signal-ask runs)
+    uninstall   Stop the bridge and remove its service. Keeps your config and Signal keys.
 
-const [command, ...args] = process.argv.slice(2);
+  Options:
+    --help      Show this help
+    --version   Show the version
+`,
+  {
+    importMeta: import.meta,
+    pkg: packageJson,
+    description: false,
+    commands: ["install", "update", "status", "run", "ask", "uninstall"],
+  },
+);
+
+const appSource = fileURLToPath(import.meta.url);
 
 try {
-  switch (command) {
+  switch (cli.command) {
     case "install":
-      await install(fileURLToPath(import.meta.url));
+      await install(appSource);
+      break;
+    case "update":
+      update(appSource);
+      console.log(`Updated the bridge to ${packageJson.version}.`);
       break;
     case "status": {
       const status = serviceStatus();
@@ -39,16 +57,11 @@ try {
       process.exitCode = status === "running" ? 0 : 1;
       break;
     }
-    case "version":
-    case "--version":
-    case "-v":
-      console.log(packageJson.version);
-      break;
     case "run":
       runBridge(loadConfig());
       break;
     case "ask":
-      await ask(args);
+      await ask(cli.input.map(String));
       break;
     case "uninstall":
       uninstall();
@@ -57,8 +70,7 @@ try {
       );
       break;
     default:
-      console.log(help);
-      process.exitCode = command && command !== "help" && command !== "--help" ? 1 : 0;
+      cli.showHelp(0);
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
