@@ -2,23 +2,19 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { arch, platform, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { exec, run } from "./exec.ts";
+import { exec, run, tryRun } from "./exec.ts";
 import { paths } from "./paths.ts";
-import { signalCliArgs } from "./signal.ts";
+import { dataDirArgs, signalCliArgs } from "./signal.ts";
+import { parseJson } from "./util.ts";
 import { which } from "./which.ts";
 
 const contactsSchema = z.array(
   z.object({ number: z.string().nullish(), uuid: z.string().nullish() }),
 );
 
-async function signalCliVersion(binary: string) {
-  const result = await exec(binary, ["--version"]);
-  return result.ok ? result.stdout.trim() : undefined;
-}
-
 export async function findSignalCli(configured?: string) {
   for (const candidate of [configured, paths.signalCliBinary, which("signal-cli")]) {
-    if (candidate && (await signalCliVersion(candidate)) !== undefined) return candidate;
+    if (candidate && (await tryRun(candidate, ["--version"])) !== undefined) return candidate;
   }
   return undefined;
 }
@@ -49,7 +45,7 @@ export async function downloadNative() {
   } finally {
     await rm(archive, { force: true });
   }
-  return { version: release.tag_name, binary: paths.signalCliBinary };
+  return release.tag_name;
 }
 
 export function signalAccount(binary: string, account: string) {
@@ -57,7 +53,7 @@ export function signalAccount(binary: string, account: string) {
 
   return {
     isRegistered: async () => {
-      const result = await exec(binary, ["--data-dir", paths.signalData, "listAccounts"]);
+      const result = await exec(binary, [...dataDirArgs, "listAccounts"]);
       return result.ok && result.stdout.includes(account);
     },
     register: (captcha: string, voice: boolean) =>
@@ -68,7 +64,7 @@ export function signalAccount(binary: string, account: string) {
     send: (recipient: string, message: string) => signalCli("send", "-m", message, recipient),
     uuidOf: async (number: string) => {
       const contacts = contactsSchema.parse(
-        JSON.parse(await signalCli("-o", "json", "listContacts")),
+        parseJson(await signalCli("-o", "json", "listContacts")),
       );
       return contacts.find((contact) => contact.number === number)?.uuid ?? undefined;
     },

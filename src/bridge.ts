@@ -12,9 +12,9 @@ import { errorMessage } from "./util.ts";
 
 export function runBridge(config: Config) {
   const store = new ThreadStore(paths.threads);
-  const t3Found = findT3(config.t3Bin);
-  if (!t3Found) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
-  const t3 = createT3(t3Found.binary);
+  const t3Binary = findT3(config.t3Bin);
+  if (!t3Binary) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
+  const t3 = createT3(t3Binary);
   const signal = connectSignal({
     binary: config.signalCli,
     botNumber: config.botNumber,
@@ -37,7 +37,7 @@ export function runBridge(config: Config) {
   async function startThread(text: string) {
     const workspace = pickWorkspace(text, await listProjects(), config.defaultProject);
     const base = workspace.isProject ? await defaultBranch(workspace.path) : undefined;
-    return t3.startThread(workspace.path, base, workspace.text);
+    return t3.startThread(workspace.path, workspace.text, base);
   }
 
   async function handle(message: Incoming) {

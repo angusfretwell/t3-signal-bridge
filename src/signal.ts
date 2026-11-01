@@ -8,7 +8,7 @@ export type Incoming = { timestamp: number; text: string; quotedTimestamp?: numb
 
 export type TextStyle = "BOLD" | "ITALIC" | "STRIKETHROUGH" | "MONOSPACE";
 export type StyleRange = { start: number; length: number; style: TextStyle };
-export type Outgoing = { text: string; styles?: StyleRange[]; attachments?: string[] };
+type Outgoing = { text: string; styles?: StyleRange[]; attachments?: string[] };
 
 const envelopeSchema = z.object({
   source: z.string().nullish(),
@@ -52,9 +52,10 @@ const responseSchema = z.object({
 
 const sendResultSchema = z.object({ timestamp: z.number() });
 
+export const dataDirArgs = ["--data-dir", paths.signalData];
+
 export const signalCliArgs = (account: string, ...args: string[]) => [
-  "--data-dir",
-  paths.signalData,
+  ...dataDirArgs,
   "-a",
   account,
   ...args,

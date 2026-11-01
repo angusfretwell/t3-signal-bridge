@@ -4,8 +4,8 @@ import { ask } from "./ask.ts";
 import { runBridge } from "./bridge.ts";
 import { loadConfig } from "./config.ts";
 import { install } from "./install.ts";
-import { paths } from "./paths.ts";
-import { serviceName, serviceStatus, undeploy, update } from "./service.ts";
+import { paths, serviceName } from "./paths.ts";
+import { serviceStatus, undeploy, update } from "./service.ts";
 import { errorMessage } from "./util.ts";
 
 const help = `
@@ -38,7 +38,7 @@ async function printStatus() {
   process.exitCode = status === "running" ? 0 : 1;
 }
 
-async function runCommand(command: string, args: string[]) {
+async function runCommand(command: string) {
   switch (command) {
     case "install":
       await install(import.meta.filename);
@@ -53,9 +53,6 @@ async function runCommand(command: string, args: string[]) {
     case "run":
       runBridge(loadConfig());
       break;
-    case "ask":
-      await ask(args);
-      break;
     case "uninstall":
       await undeploy();
       console.log(
@@ -68,10 +65,12 @@ async function runCommand(command: string, args: string[]) {
   }
 }
 
-try {
+async function main() {
+  if (process.argv[2] === "ask") return ask(process.argv.slice(3));
+
   const {
     values,
-    positionals: [command, ...args],
+    positionals: [command],
   } = parseArgs({
     allowPositionals: true,
     options: {
@@ -82,7 +81,11 @@ try {
 
   if (values.version) console.log(packageJson.version);
   else if (values.help || !command) console.log(help);
-  else await runCommand(command, args);
+  else await runCommand(command);
+}
+
+try {
+  await main();
 } catch (error) {
   console.error(errorMessage(error));
   process.exit(1);

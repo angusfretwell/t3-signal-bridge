@@ -115,8 +115,6 @@ export function toSignal(markdown: string) {
         return indented("│ ", () => blocks(node.children, "\n\n"), "│ ");
       case "list":
         return list(node);
-      case "paragraph":
-        return inline(node.children);
       case "text":
       case "html":
         return write(node.value);
@@ -145,9 +143,7 @@ export function toSignal(markdown: string) {
       }
       case "imageReference":
         return write(node.alt ?? "");
-      case "definition":
       case "footnoteDefinition":
-      case "yaml":
         return;
       default:
         if ("children" in node) return inline(node.children);

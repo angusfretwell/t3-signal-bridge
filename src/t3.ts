@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { join } from "node:path";
 import { z } from "zod";
 import { exec } from "./exec.ts";
 import { paths } from "./paths.ts";
@@ -17,8 +17,6 @@ export type RunResult = z.infer<typeof runResultSchema>;
 
 const threadSchema = z.object({ thread: z.object({ title: z.string() }) });
 
-export const insideT3Home = (path: string) => !relative(paths.t3Home, path).startsWith("..");
-
 function serviceBinary() {
   try {
     const { activeVersion } = JSON.parse(
@@ -31,19 +29,7 @@ function serviceBinary() {
   }
 }
 
-export function findT3(configured?: string): { binary: string; persist: boolean } | undefined {
-  if (configured) return { binary: configured, persist: true };
-  const service = serviceBinary();
-  if (service) return { binary: service, persist: false };
-  const onPath = which("t3");
-  if (onPath) return { binary: onPath, persist: isAbsolute(onPath) && !insideT3Home(onPath) };
-  return undefined;
-}
-
-export async function t3Version(binary: string): Promise<string | undefined> {
-  const result = await exec(binary, ["--version"]);
-  return result.ok ? result.stdout.trim() : undefined;
-}
+export const findT3 = (configured?: string) => configured || serviceBinary() || which("t3");
 
 export function createT3(binary: string) {
   async function t3<T>(schema: z.ZodType<T>, args: string[], input?: string): Promise<T> {
@@ -56,7 +42,7 @@ export function createT3(binary: string) {
   }
 
   return {
-    startThread: (projectPath: string, base: string | undefined, message: string) =>
+    startThread: (projectPath: string, message: string, base?: string) =>
       t3(
         runResultSchema,
         [

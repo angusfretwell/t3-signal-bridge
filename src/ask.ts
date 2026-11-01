@@ -26,17 +26,23 @@ export function serveAsk(
       sendJson(response, 415, { error: "Send the question as application/json." });
       return;
     }
-    const ask = askSchema.safeParse(parseJson(await text(request)));
+    const body = await text(request).catch(() => undefined);
+    if (body === undefined) {
+      sendJson(response, 400, { error: "Couldn't read the request body." });
+      return;
+    }
+    const ask = askSchema.safeParse(parseJson(body));
     if (!ask.success) {
       sendJson(response, 400, { error: ask.error.message });
       return;
     }
     try {
       await onQuestion(ask.data.threadId, ask.data.question);
-      sendJson(response, 200, { sent: true });
     } catch (error) {
-      sendJson(response, 502, { error: String(error) });
+      sendJson(response, 502, { error: errorMessage(error) });
+      return;
     }
+    sendJson(response, 200, { sent: true });
   });
 
   return server.listen(port, host, () =>

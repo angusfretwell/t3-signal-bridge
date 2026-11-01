@@ -1,10 +1,7 @@
-import { exec } from "./exec.ts";
+import { tryRun } from "./exec.ts";
 
 export async function defaultBranch(projectPath: string) {
-  const git = async (...args: string[]) => {
-    const result = await exec("git", ["-C", projectPath, ...args]);
-    return result.ok ? result.stdout.trim() : undefined;
-  };
+  const git = (...args: string[]) => tryRun("git", ["-C", projectPath, ...args]);
   const remoteHead = await git("symbolic-ref", "--short", "refs/remotes/origin/HEAD");
   return (
     remoteHead?.replace(/^origin\//, "") ??

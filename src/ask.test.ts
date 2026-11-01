@@ -1,6 +1,6 @@
 import { once } from "node:events";
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { serveAsk } from "./ask.ts";
 
@@ -67,6 +67,24 @@ describe("serveAsk", () => {
     onQuestion.mockRejectedValueOnce(new Error("signal-cli exited"));
     const response = await post(JSON.stringify({ threadId: "thread-a", question: "Ship it?" }));
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: "Error: signal-cli exited" });
+    expect(await response.json()).toEqual({ error: "signal-cli exited" });
+  });
+
+  test("survives a client that disconnects mid-body", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const connected = once(server, "connection");
+    const client = connect((server.address() as AddressInfo).port, "127.0.0.1");
+    const [serverSocket] = await connected;
+    const serverClosed = new Promise((resolve) => serverSocket.once("close", resolve));
+    client.end(
+      "POST /ask HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{",
+    );
+    await serverClosed;
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off("unhandledRejection", unhandled);
+
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(onQuestion).not.toHaveBeenCalled();
   });
 });

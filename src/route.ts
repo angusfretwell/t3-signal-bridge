@@ -1,6 +1,6 @@
 import type { Workspaces } from "./projects.ts";
 
-export type Route =
+type Route =
   | { kind: "reply"; threadId: string; text: string }
   | { kind: "start"; text: string }
   | { kind: "unknown-quote" };
