@@ -1,8 +1,9 @@
-import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { z } from "zod";
+import { exec } from "./exec.ts";
 import { paths } from "./paths.ts";
+import { parseJson } from "./util.ts";
 import { which } from "./which.ts";
 
 const runResultSchema = z.object({
@@ -16,6 +17,8 @@ export type RunResult = z.infer<typeof runResultSchema>;
 
 const threadSchema = z.object({ thread: z.object({ title: z.string() }) });
 
+export const insideT3Home = (path: string) => !relative(paths.t3Home, path).startsWith("..");
+
 function serviceBinary() {
   try {
     const { activeVersion } = JSON.parse(
@@ -28,69 +31,51 @@ function serviceBinary() {
   }
 }
 
-export function resolveT3(configured?: string) {
-  return configured ?? serviceBinary() ?? which("t3");
+export function findT3(configured?: string): { binary: string; persist: boolean } | undefined {
+  if (configured) return { binary: configured, persist: true };
+  const service = serviceBinary();
+  if (service) return { binary: service, persist: false };
+  const onPath = which("t3");
+  if (onPath) return { binary: onPath, persist: isAbsolute(onPath) && !insideT3Home(onPath) };
+  return undefined;
+}
+
+export async function t3Version(binary: string): Promise<string | undefined> {
+  const result = await exec(binary, ["--version"]);
+  return result.ok ? result.stdout.trim() : undefined;
 }
 
 export function createT3(binary: string) {
-  function t3(args: string[], stdin?: string): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const child = spawn(binary, args);
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk) => (stdout += chunk));
-      child.stderr.on("data", (chunk) => (stderr += chunk));
-      child.on("error", reject);
-      child.on("close", (code) => {
-        try {
-          resolve(JSON.parse(stdout));
-        } catch {
-          reject(
-            new Error(
-              `t3 ${args.slice(0, 2).join(" ")} exited ${code}: ${(stderr || stdout).trim().slice(-500)}`,
-            ),
-          );
-        }
-      });
-      child.stdin.end(stdin);
-    });
+  async function t3<T>(schema: z.ZodType<T>, args: string[], input?: string): Promise<T> {
+    const result = await exec(binary, args, input);
+    const parsed = schema.safeParse(parseJson(result.stdout));
+    if (parsed.success) return parsed.data;
+    throw new Error(
+      `t3 ${args.slice(0, 2).join(" ")} exited ${result.code}: ${(result.stderr || result.stdout).trim().slice(-500)}`,
+    );
   }
 
   return {
-    version: () =>
-      new Promise<string>((resolve, reject) => {
-        const child = spawn(binary, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
-        let stdout = "";
-        child.stdout.on("data", (chunk) => (stdout += chunk));
-        child.on("error", reject);
-        child.on("close", (code) =>
-          code === 0 ? resolve(stdout.trim()) : reject(new Error(`t3 exited ${code}`)),
-        );
-      }),
-
-    startThread: async (projectPath: string, base: string | undefined, message: string) =>
-      runResultSchema.parse(
-        await t3(
-          [
-            "thread",
-            "start",
-            "--json",
-            "--wait",
-            ...(base ? ["--worktree", base] : []),
-            projectPath,
-            "-",
-          ],
-          message,
-        ),
+    startThread: (projectPath: string, base: string | undefined, message: string) =>
+      t3(
+        runResultSchema,
+        [
+          "thread",
+          "start",
+          "--json",
+          "--wait",
+          ...(base ? ["--worktree", base] : []),
+          projectPath,
+          "-",
+        ],
+        message,
       ),
 
-    sendToThread: async (threadId: string, message: string) =>
-      runResultSchema.parse(
-        await t3(["thread", "send", "--json", "--wait", threadId, "-"], message),
-      ),
+    sendToThread: (threadId: string, message: string) =>
+      t3(runResultSchema, ["thread", "send", "--json", "--wait", threadId, "-"], message),
 
     threadTitle: async (threadId: string) =>
-      threadSchema.parse(await t3(["thread", "show", "--json", "--messages", "0", threadId])).thread
+      (await t3(threadSchema, ["thread", "show", "--json", "--messages", "0", threadId])).thread
         .title,
   };
 }

@@ -1,9 +1,9 @@
-import { readConfig } from "./config.ts";
+import { defaultPort, readConfig } from "./config.ts";
 
 export async function ask(args: string[]) {
   const threadId = process.env.T3CODE_THREAD_ID;
   const question = (args.join(" ") || (process.stdin.isTTY ? "" : await readStdin())).trim();
-  const port = readConfig()?.port ?? 8787;
+  const port = readConfig()?.port ?? defaultPort;
   const bridgeUrl = process.env.SIGNAL_BRIDGE_URL ?? `http://127.0.0.1:${port}`;
 
   if (!threadId)

@@ -1,14 +1,8 @@
-import { isAbsolute } from "node:path";
 import * as p from "@clack/prompts";
 import { readConfig, writeConfig } from "./config.ts";
 import { paths } from "./paths.ts";
 import { listProjects } from "./projects.ts";
-import {
-  canDownloadNative,
-  downloadNative,
-  findSignalCli,
-  signalCliCommands,
-} from "./signal-cli.ts";
+import { canDownloadNative, downloadNative, findSignalCli, signalAccount } from "./signal-setup.ts";
 import {
   copyApp,
   hasSystemd,
@@ -17,7 +11,8 @@ import {
   lingerEnabled,
   stopService,
 } from "./service.ts";
-import { createT3, resolveT3 } from "./t3.ts";
+import { findT3, t3Version } from "./t3.ts";
+import { errorMessage } from "./util.ts";
 
 const phoneNumber = /^\+[1-9]\d{6,14}$/;
 const examplePhone = "+61400000000";
@@ -44,7 +39,7 @@ async function step<T>(start: string, done: string, work: () => Promise<T>) {
     return result;
   } catch (error) {
     spinner.error(start);
-    fail(error instanceof Error ? error.message : String(error));
+    fail(errorMessage(error));
   }
 }
 
@@ -94,7 +89,7 @@ async function askPin(): Promise<string> {
   return askPin();
 }
 
-async function register(commands: ReturnType<typeof signalCliCommands>) {
+async function register(commands: ReturnType<typeof signalAccount>) {
   p.note(
     [
       "Signal needs a captcha before it sends a code.",
@@ -141,17 +136,13 @@ export async function install(appSource: string) {
 
   const existing = readConfig();
 
-  const t3Bin = resolveT3(existing?.t3Bin);
-  const t3Version =
-    t3Bin &&
-    (await createT3(t3Bin)
-      .version()
-      .catch(() => undefined));
-  if (!t3Bin || !t3Version)
+  const t3 = findT3(existing?.t3Bin);
+  const t3Release = t3 && (await t3Version(t3.binary));
+  if (!t3 || !t3Release)
     fail("Couldn't run the T3 Code CLI. Install T3 Code, or put `t3` on your PATH.");
-  p.log.success(`Found T3 Code ${t3Version}`);
+  p.log.success(`Found T3 Code ${t3Release}`);
 
-  let signalCli = findSignalCli(existing?.signalCli);
+  let signalCli = await findSignalCli(existing?.signalCli);
   if (!signalCli) {
     if (!canDownloadNative) {
       fail(
@@ -181,7 +172,7 @@ export async function install(appSource: string) {
   const defaultProject = await askDefaultProject(existing?.defaultProject);
 
   stopService();
-  const commands = signalCliCommands(signalCli, botNumber);
+  const commands = signalAccount(signalCli, botNumber);
   let botName = existing?.botName ?? "T3 Code";
   if (await commands.isRegistered()) p.log.success(`${botNumber} is already registered`);
   else botName = await register(commands);
@@ -202,8 +193,7 @@ export async function install(appSource: string) {
     signalCli,
     defaultProject,
     port: existing?.port,
-    t3Bin:
-      existing?.t3Bin ?? (isAbsolute(t3Bin) && !t3Bin.startsWith(paths.t3Home) ? t3Bin : undefined),
+    t3Bin: existing?.t3Bin ?? (t3.persist ? t3.binary : undefined),
   });
   copyApp(appSource);
 

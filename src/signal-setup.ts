@@ -1,30 +1,26 @@
-import { execFile, spawnSync } from "node:child_process";
-import { createWriteStream, mkdirSync, rmSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { arch, platform, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream as WebReadableStream } from "node:stream/web";
-import { promisify } from "node:util";
 import { z } from "zod";
+import { exec, run } from "./exec.ts";
 import { paths } from "./paths.ts";
+import { signalCliArgs } from "./signal.ts";
 import { which } from "./which.ts";
-
-const run = promisify(execFile);
 
 const contactsSchema = z.array(
   z.object({ number: z.string().nullish(), uuid: z.string().nullish() }),
 );
 
-export function signalCliVersion(binary: string) {
-  const result = spawnSync(binary, ["--version"], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : undefined;
+async function signalCliVersion(binary: string) {
+  const result = await exec(binary, ["--version"]);
+  return result.ok ? result.stdout.trim() : undefined;
 }
 
-export function findSignalCli(configured?: string) {
-  return [configured, paths.signalCliBinary, which("signal-cli")].find(
-    (candidate): candidate is string => !!candidate && signalCliVersion(candidate) !== undefined,
-  );
+export async function findSignalCli(configured?: string) {
+  for (const candidate of [configured, paths.signalCliBinary, which("signal-cli")]) {
+    if (candidate && (await signalCliVersion(candidate)) !== undefined) return candidate;
+  }
+  return undefined;
 }
 
 export const canDownloadNative = platform() === "linux" && arch() === "x64";
@@ -46,33 +42,23 @@ export async function downloadNative() {
   const download = await fetch(asset.browser_download_url);
   if (!download.ok || !download.body)
     throw new Error(`Downloading ${asset.name} failed: ${download.status}`);
-  await pipeline(Readable.fromWeb(download.body as WebReadableStream), createWriteStream(archive));
-
-  mkdirSync(dirname(paths.signalCliBinary), { recursive: true });
-  await run("tar", ["xzf", archive, "-C", dirname(paths.signalCliBinary)]);
-  rmSync(archive);
+  try {
+    await writeFile(archive, download.body);
+    await mkdir(dirname(paths.signalCliBinary), { recursive: true });
+    await run("tar", ["xzf", archive, "-C", dirname(paths.signalCliBinary)]);
+  } finally {
+    await rm(archive, { force: true });
+  }
   return { version: release.tag_name, binary: paths.signalCliBinary };
 }
 
-export function signalCliCommands(binary: string, account: string) {
-  const signalCli = async (...args: string[]) => {
-    try {
-      return (await run(binary, ["--data-dir", paths.signalData, "-a", account, ...args])).stdout;
-    } catch (error) {
-      const { stderr, message } = error as { stderr?: string; message: string };
-      throw new Error(stderr?.trim() || message);
-    }
-  };
+export function signalAccount(binary: string, account: string) {
+  const signalCli = (...args: string[]) => run(binary, signalCliArgs(account, ...args));
 
   return {
     isRegistered: async () => {
-      try {
-        return (
-          await run(binary, ["--data-dir", paths.signalData, "listAccounts"])
-        ).stdout.includes(account);
-      } catch {
-        return false;
-      }
+      const result = await exec(binary, ["--data-dir", paths.signalData, "listAccounts"]);
+      return result.ok && result.stdout.includes(account);
     },
     register: (captcha: string, voice: boolean) =>
       signalCli("register", "--captcha", captcha, ...(voice ? ["--voice"] : [])),

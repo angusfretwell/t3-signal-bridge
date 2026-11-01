@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { z } from "zod";
 import type { SignalMessage } from "./format.ts";
+import { paths } from "./paths.ts";
+import { parseJson } from "./util.ts";
 
 export type Incoming = { timestamp: number; text: string; quotedTimestamp?: number };
 
@@ -47,16 +49,23 @@ const responseSchema = z.object({
 
 const sendResultSchema = z.object({ timestamp: z.number() });
 
+export const signalCliArgs = (account: string, ...args: string[]) => [
+  "--data-dir",
+  paths.signalData,
+  "-a",
+  account,
+  ...args,
+];
+
 export function createSignal(options: {
   binary: string;
-  dataDir: string;
   botNumber: string;
   owner: string;
   ownerUuid?: string;
 }) {
   const { botNumber, owner } = options;
   const ownerIds = [owner, options.ownerUuid].filter((id): id is string => !!id);
-  const child = spawn(options.binary, ["--data-dir", options.dataDir, "-a", botNumber, "jsonRpc"], {
+  const child = spawn(options.binary, signalCliArgs(botNumber, "jsonRpc"), {
     stdio: ["pipe", "pipe", "inherit"],
   });
   process.on("exit", () => child.kill());
@@ -68,12 +77,8 @@ export function createSignal(options: {
   let nextId = 0;
 
   createInterface({ input: child.stdout }).on("line", (line) => {
-    let json: unknown;
-    try {
-      json = JSON.parse(line);
-    } catch {
-      return;
-    }
+    const json = parseJson(line);
+    if (json === undefined) return;
     const response = responseSchema.safeParse(json);
     if (response.success) {
       const request = pending.get(response.data.id);

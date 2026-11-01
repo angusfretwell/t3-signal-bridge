@@ -1,7 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { paths } from "./paths.ts";
+import { writeFileIn } from "./util.ts";
+
+export const defaultPort = 8787;
 
 export const configSchema = z.object({
   botNumber: z.string().min(1),
@@ -10,7 +12,7 @@ export const configSchema = z.object({
   ownerUuid: z.string().optional(),
   signalCli: z.string().min(1),
   defaultProject: z.string().optional(),
-  port: z.number().int().default(8787),
+  port: z.number().int().default(defaultPort),
   t3Bin: z.string().optional(),
 });
 
@@ -34,6 +36,5 @@ export function loadConfig(file = paths.config): Config {
 }
 
 export function writeConfig(config: ConfigInput, file = paths.config) {
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(configSchema.parse(config), null, 2)}\n`, { mode: 0o600 });
+  writeFileIn(file, `${JSON.stringify(configSchema.parse(config), null, 2)}\n`, { mode: 0o600 });
 }

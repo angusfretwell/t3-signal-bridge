@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { writeFileIn } from "./util.ts";
 
 const maxEntries = 1000;
 
@@ -18,8 +18,7 @@ export class ThreadStore {
       if (this.threads.size <= maxEntries) break;
       this.threads.delete(oldest);
     }
-    mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(this.file, JSON.stringify([...this.threads]));
+    writeFileIn(this.file, JSON.stringify([...this.threads]));
   }
 }
 

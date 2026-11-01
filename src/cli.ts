@@ -7,6 +7,7 @@ import { loadConfig } from "./config.ts";
 import { install } from "./install.ts";
 import { paths, serviceName } from "./paths.ts";
 import { serviceStatus, uninstall, update } from "./service.ts";
+import { errorMessage } from "./util.ts";
 
 const cli = meow(
   `
@@ -73,6 +74,6 @@ try {
       cli.showHelp(0);
   }
 } catch (error) {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(errorMessage(error));
   process.exit(1);
 }

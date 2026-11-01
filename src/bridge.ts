@@ -3,11 +3,13 @@ import { z } from "zod";
 import type { Config } from "./config.ts";
 import { toSignal } from "./format.ts";
 import { paths } from "./paths.ts";
-import { defaultBranch, listProjects, type Project } from "./projects.ts";
+import { defaultBranch } from "./git.ts";
+import { listProjects, type Project } from "./projects.ts";
 import { type Route, route } from "./route.ts";
 import { createSignal, type Incoming } from "./signal.ts";
 import { ThreadStore } from "./store.ts";
-import { createT3, type RunResult, resolveT3 } from "./t3.ts";
+import { createT3, findT3, type RunResult } from "./t3.ts";
+import { errorMessage, parseJson } from "./util.ts";
 
 const askSchema = z.object({ threadId: z.string().min(1), question: z.string().min(1) });
 
@@ -27,22 +29,13 @@ export function threadHeader(title: string) {
     .trimEnd()}…`;
 }
 
-function parseJson(body: string): unknown {
-  try {
-    return JSON.parse(body);
-  } catch {
-    return undefined;
-  }
-}
-
 export function runBridge(config: Config) {
   const store = new ThreadStore(paths.threads);
-  const t3Bin = resolveT3(config.t3Bin);
-  if (!t3Bin) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
-  const t3 = createT3(t3Bin);
+  const t3Found = findT3(config.t3Bin);
+  if (!t3Found) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
+  const t3 = createT3(t3Found.binary);
   const signal = createSignal({
     binary: config.signalCli,
-    dataDir: paths.signalData,
     botNumber: config.botNumber,
     owner: config.owner,
     ownerUuid: config.ownerUuid,
@@ -63,23 +56,24 @@ export function runBridge(config: Config) {
   async function run(
     target: Exclude<Route, { kind: "unknown-quote" }>,
     projects: Project[],
-    noProject?: string,
+    scratchPath?: string,
   ) {
     if (target.kind === "reply") return t3.sendToThread(target.threadId, target.text);
     const project = projects.find((candidate) =>
       target.project ? candidate.name === target.project : candidate.path === config.defaultProject,
     );
-    if (project) return t3.startThread(project.path, defaultBranch(project.path), target.text);
-    if (!noProject)
+    if (project)
+      return t3.startThread(project.path, await defaultBranch(project.path), target.text);
+    if (!scratchPath)
       throw new Error('T3 Code has no "No project" space. Start the message with a project name.');
-    return t3.startThread(noProject, undefined, target.text);
+    return t3.startThread(scratchPath, undefined, target.text);
   }
 
   async function handle(message: Incoming) {
-    const { projects, noProject } =
+    const { projects, scratchPath } =
       message.quotedTimestamp === undefined
         ? await listProjects()
-        : { projects: [], noProject: undefined };
+        : { projects: [], scratchPath: undefined };
     const target = route(
       message,
       store.threadFor,
@@ -93,16 +87,14 @@ export function runBridge(config: Config) {
     }
 
     await signal.react("👀", message.timestamp);
-    const result = await run(target, projects, noProject);
+    const result = await run(target, projects, scratchPath);
     await sendFromThread(result.threadId, describe(result));
   }
 
   signal.listen((message) => {
     handle(message).catch((error) => {
       console.error(error);
-      signal
-        .send({ text: `⚠️ ${error instanceof Error ? error.message : String(error)}` })
-        .catch(console.error);
+      signal.send({ text: `⚠️ ${errorMessage(error)}` }).catch(console.error);
     });
   });
 
