@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import packageJson from "../package.json" with { type: "json" };
 import { ask } from "./ask.ts";
 import { runBridge } from "./bridge.ts";
 import { loadConfig } from "./config.ts";
@@ -13,6 +14,7 @@ Commands:
   status      Show whether the bridge's service is installed and running
   run         Run the bridge in the foreground
   ask <text>  Send a question from the current T3 Code thread (what signal-ask runs)
+  version     Show the installed version
   uninstall   Stop the bridge and remove its service. Keeps your config and Signal keys.
 `;
 
@@ -37,6 +39,11 @@ try {
       process.exitCode = status === "running" ? 0 : 1;
       break;
     }
+    case "version":
+    case "--version":
+    case "-v":
+      console.log(packageJson.version);
+      break;
     case "run":
       runBridge(loadConfig());
       break;
