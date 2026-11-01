@@ -35,7 +35,7 @@ If you can't continue without the owner's decision, run `signal-ask "<question>"
 
 To change your settings, run `npx t3-signal-bridge install` again.
 
-## Usage
+## CLI Reference
 
 | Command                              | What it does                                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
