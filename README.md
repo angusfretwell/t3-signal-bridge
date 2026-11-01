@@ -1,0 +1,38 @@
+# T3 Code Signal Bridge
+
+Start, answer and follow [T3 Code](https://github.com/pingdotgg/t3code) threads from Signal:
+
+- Message the bot to start a thread in your default project. Prefix a T3 Code project name (`api: bump deps`) to pick another.
+- Quote-reply to a bot message to answer its thread.
+- Bot reacts 👀 when it gets your message and replies when its thread finishes.
+- Let agents ask you questions and wait for your answer.
+
+This is not an official T3 Code project.
+
+## Installation
+
+You need:
+
+- T3 Code, on a Linux machine with systemd.
+- Node.js 22.13 or later.
+- A phone number for the bot. A cheap prepaid SIM or eSIM works; virtual numbers usually don't.
+
+Run the installer on the machine where T3 Code runs:
+
+```sh
+npx t3-signal-bridge install
+```
+
+The installer asks for the bot's number, your Signal number and a default project (No project unless you pick one). It registers the bot with Signal, sends you a test message, and starts the bridge as a background service.
+
+On your phone, save the bot as a contact so that its messages notify you.
+
+To let agents ask you questions, add this line to your AGENTS.md or to a scheduled task's prompt:
+
+```md
+If you can't continue without the owner's decision, run `signal-ask "<question>"` and end your turn. Their reply arrives as your next message.
+```
+
+To change your settings, run `npx t3-signal-bridge install` again.
+
+To remove the bridge, run `npx t3-signal-bridge uninstall`.

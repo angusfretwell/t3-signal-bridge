@@ -1,0 +1,126 @@
+import { createServer } from "node:http";
+import { z } from "zod";
+import type { Config } from "./config.ts";
+import { paths } from "./paths.ts";
+import { defaultBranch, listProjects, type Project } from "./projects.ts";
+import { type Route, route } from "./route.ts";
+import { createSignal, type Incoming } from "./signal.ts";
+import { ThreadStore } from "./store.ts";
+import { createT3, type RunResult, resolveT3 } from "./t3.ts";
+
+const askSchema = z.object({ threadId: z.string().min(1), question: z.string().min(1) });
+
+function describe(result: RunResult) {
+  if (result.status === "completed") return result.reply || "(no reply)";
+  return `Run ${result.status}${result.error ? `: ${result.error}` : ""}${result.reply ? `\n\n${result.reply}` : ""}`;
+}
+
+function parseJson(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+}
+
+export function runBridge(config: Config) {
+  const store = new ThreadStore(paths.threads);
+  const t3Bin = resolveT3(config.t3Bin);
+  if (!t3Bin) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
+  const t3 = createT3(t3Bin);
+  const signal = createSignal({
+    binary: config.signalCli,
+    dataDir: paths.signalData,
+    botNumber: config.botNumber,
+    owner: config.owner,
+    ownerUuid: config.ownerUuid,
+  });
+
+  async function sendFromThread(threadId: string, body: string) {
+    const title = await t3.threadTitle(threadId).catch(() => threadId);
+    store.remember(await signal.send(`${title}\n\n${body}`), threadId);
+  }
+
+  async function run(
+    target: Exclude<Route, { kind: "unknown-quote" }>,
+    projects: Project[],
+    noProject?: string,
+  ) {
+    if (target.kind === "reply") return t3.sendToThread(target.threadId, target.text);
+    const project = projects.find((candidate) =>
+      target.project ? candidate.name === target.project : candidate.path === config.defaultProject,
+    );
+    if (project) return t3.startThread(project.path, defaultBranch(project.path), target.text);
+    if (!noProject)
+      throw new Error('T3 Code has no "No project" space. Start the message with a project name.');
+    return t3.startThread(noProject, undefined, target.text);
+  }
+
+  async function handle(message: Incoming) {
+    const { projects, noProject } =
+      message.quotedTimestamp === undefined
+        ? await listProjects()
+        : { projects: [], noProject: undefined };
+    const target = route(
+      message,
+      store.threadFor,
+      projects.map((project) => project.name),
+    );
+    if (target.kind === "unknown-quote") {
+      await signal.send(
+        "I don't know which thread that message belongs to. Send it without quoting to start a new thread.",
+      );
+      return;
+    }
+
+    await signal.react("👀", message.timestamp);
+    const result = await run(target, projects, noProject);
+    await sendFromThread(result.threadId, describe(result));
+  }
+
+  signal.listen((message) => {
+    handle(message).catch((error) => {
+      console.error(error);
+      signal
+        .send(`⚠️ ${error instanceof Error ? error.message : String(error)}`)
+        .catch(console.error);
+    });
+  });
+
+  const server = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/ask") {
+      response.writeHead(404).end();
+      return;
+    }
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const ask = askSchema.safeParse(parseJson(body));
+    if (!ask.success) {
+      response
+        .writeHead(400, { "content-type": "application/json" })
+        .end(JSON.stringify({ error: ask.error.message }));
+      return;
+    }
+    try {
+      await sendFromThread(ask.data.threadId, `❓ ${ask.data.question}`);
+      response
+        .writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify({ sent: true }));
+    } catch (error) {
+      response
+        .writeHead(502, { "content-type": "application/json" })
+        .end(JSON.stringify({ error: String(error) }));
+    }
+  });
+
+  server.listen(config.port, "127.0.0.1", () =>
+    console.log(`t3-signal-bridge listening on 127.0.0.1:${config.port}`),
+  );
+
+  for (const signalName of ["SIGTERM", "SIGINT"] as const)
+    process.on(signalName, () => process.exit(0));
+  void signal.exited.then((code) => {
+    console.error(`signal-cli exited with code ${code}`);
+    process.exit(1);
+  });
+}

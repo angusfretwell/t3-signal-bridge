@@ -1,0 +1,42 @@
+{
+  "name": "t3-signal-bridge",
+  "version": "0.1.0",
+  "description": "Start, answer and follow T3 Code threads from Signal",
+  "keywords": [
+    "agents",
+    "claude-code",
+    "codex",
+    "signal",
+    "t3code"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angusfretwell/t3-signal-bridge.git"
+  },
+  "bin": {
+    "t3-signal-bridge": "dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "test": "vp test",
+    "prepublishOnly": "vp check && vp test && vp pack"
+  },
+  "devDependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@types/node": "^26.6.6",
+    "vite-plus": "1.4.0",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
