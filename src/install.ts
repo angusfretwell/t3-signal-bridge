@@ -1,41 +1,36 @@
+import { dirname } from "node:path";
 import * as p from "@clack/prompts";
 import { readConfig, writeConfig } from "./config.ts";
 import { paths } from "./paths.ts";
 import { listProjects } from "./projects.ts";
 import { canDownloadNative, downloadNative, findSignalCli, signalAccount } from "./signal-setup.ts";
-import {
-  copyApp,
-  hasSystemd,
-  installAskShim,
-  installService,
-  lingerEnabled,
-  stopService,
-} from "./service.ts";
+import { deploy, lingerEnabled, stopService } from "./service.ts";
 import { findT3, t3Version } from "./t3.ts";
 import { errorMessage } from "./util.ts";
 
 const phoneNumber = /^\+[1-9]\d{6,14}$/;
 const examplePhone = "+61400000000";
 
-function answer<T>(value: T): Exclude<T, symbol> {
-  if (p.isCancel(value)) {
-    p.cancel("Install cancelled.");
-    process.exit(1);
-  }
-  return value as Exclude<T, symbol>;
-}
-
 function fail(message: string): never {
   p.cancel(message);
   process.exit(1);
 }
 
-async function step<T>(start: string, done: string, work: () => Promise<T>) {
+function answer<T>(value: T): Exclude<T, symbol> {
+  if (p.isCancel(value)) fail("Install cancelled.");
+  return value as Exclude<T, symbol>;
+}
+
+async function step<T>(
+  start: string,
+  done: string | ((result: T) => string),
+  work: () => Promise<T>,
+) {
   const spinner = p.spinner();
   spinner.start(start);
   try {
     const result = await work();
-    spinner.stop(done);
+    spinner.stop(typeof done === "string" ? done : done(result));
     return result;
   } catch (error) {
     spinner.error(start);
@@ -131,47 +126,52 @@ async function register(commands: ReturnType<typeof signalAccount>) {
   return name;
 }
 
-export async function install(appSource: string) {
-  p.intro("t3-signal-bridge");
-
-  const existing = readConfig();
-
-  const t3 = findT3(existing?.t3Bin);
-  const t3Release = t3 && (await t3Version(t3.binary));
-  if (!t3 || !t3Release)
+async function requireT3(configured?: string) {
+  const t3 = findT3(configured);
+  const release = t3 && (await t3Version(t3.binary));
+  if (!t3 || !release)
     fail("Couldn't run the T3 Code CLI. Install T3 Code, or put `t3` on your PATH.");
-  p.log.success(`Found T3 Code ${t3Release}`);
+  p.log.success(`Found T3 Code ${release}`);
+  return t3;
+}
 
-  let signalCli = await findSignalCli(existing?.signalCli);
-  if (!signalCli) {
-    if (!canDownloadNative) {
-      fail(
-        "Install signal-cli (https://github.com/AsamK/signal-cli#installation) and run this again.",
-      );
-    }
-    const download = answer(
+async function ensureSignalCli(configured?: string) {
+  const found = await findSignalCli(configured);
+  if (found) return found;
+
+  const download =
+    canDownloadNative &&
+    answer(
       await p.confirm({
         message: "signal-cli isn't installed. Download its native Linux build (about 120 MB)?",
       }),
     );
-    if (!download)
-      fail(
-        "Install signal-cli (https://github.com/AsamK/signal-cli#installation) and run this again.",
-      );
-    const { version, binary } = await step(
-      "Downloading signal-cli",
-      "Downloaded signal-cli",
-      downloadNative,
+  if (!download)
+    fail(
+      "Install signal-cli (https://github.com/AsamK/signal-cli#installation) and run this again.",
     );
-    p.log.success(`Installed signal-cli ${version}`);
-    signalCli = binary;
-  }
+
+  const { version, binary } = await step(
+    "Downloading signal-cli",
+    "Downloaded signal-cli",
+    downloadNative,
+  );
+  p.log.success(`Installed signal-cli ${version}`);
+  return binary;
+}
+
+export async function install(appSource: string) {
+  p.intro("t3-signal-bridge");
+
+  const existing = readConfig();
+  const t3 = await requireT3(existing?.t3Bin);
+  const signalCli = await ensureSignalCli(existing?.signalCli);
 
   const botNumber = await askPhone("The bot's phone number", existing?.botNumber);
   const owner = await askPhone("Your Signal phone number", existing?.owner);
   const defaultProject = await askDefaultProject(existing?.defaultProject);
 
-  stopService();
+  await stopService();
   const commands = signalAccount(signalCli, botNumber);
   let botName = existing?.botName ?? "T3 Code";
   if (await commands.isRegistered()) p.log.success(`${botNumber} is already registered`);
@@ -195,26 +195,20 @@ export async function install(appSource: string) {
     port: existing?.port,
     t3Bin: existing?.t3Bin ?? (t3.persist ? t3.binary : undefined),
   });
-  copyApp(appSource);
 
-  const askOnPath = installAskShim(process.execPath);
+  const { askOnPath, systemd } = await step(
+    "Starting the bridge",
+    (result) => (result.systemd ? "Bridge running as a systemd user service" : "Bridge installed"),
+    () => deploy(appSource),
+  );
   if (!askOnPath)
-    p.log.warn(
-      `Add ${paths.askShim.replace(/\/signal-ask$/, "")} to your PATH so agents can run signal-ask.`,
-    );
-
-  if (hasSystemd()) {
-    await step("Starting the bridge", "Bridge running as a systemd user service", async () =>
-      installService(process.execPath),
-    );
-    if (!lingerEnabled()) {
-      p.log.warn("Run `loginctl enable-linger` so the bridge keeps running after you log out.");
-    }
-  } else {
+    p.log.warn(`Add ${dirname(paths.askShim)} to your PATH so agents can run signal-ask.`);
+  if (!systemd)
     p.log.warn(
       `No systemd found. Keep \`${process.execPath} ${paths.app} run\` running with your own service manager.`,
     );
-  }
+  else if (!(await lingerEnabled()))
+    p.log.warn("Run `loginctl enable-linger` so the bridge keeps running after you log out.");
 
   p.outro("Done");
   console.log(

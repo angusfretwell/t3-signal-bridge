@@ -7,12 +7,18 @@ describe("renderUnit", () => {
       'ExecStart="/opt/my node/bin/node" "/home/a$$b/app/cli.mjs" run',
     );
   });
+
+  test("escapes percent signs", () => {
+    expect(renderUnit("/opt/node", "/home/100%/app/cli.mjs")).toContain(
+      'ExecStart="/opt/node" "/home/100%%/app/cli.mjs" run',
+    );
+  });
 });
 
 describe("renderAskShim", () => {
   test("quotes paths for sh and forwards arguments", () => {
     expect(renderAskShim("/opt/my node/bin/node", "/home/a$b/app/cli.mjs")).toBe(
-      '#!/bin/sh\nexec "/opt/my node/bin/node" "/home/a\\$b/app/cli.mjs" ask "$@"\n',
+      '#!/bin/sh\nexec "/opt/my node/bin/node" "/home/a\\$b/app/cli.mjs" ask -- "$@"\n',
     );
   });
 });

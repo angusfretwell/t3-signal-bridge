@@ -1,16 +1,14 @@
-import { fileURLToPath } from "node:url";
-import meow from "meow";
+import { parseArgs } from "node:util";
 import packageJson from "../package.json" with { type: "json" };
 import { ask } from "./ask.ts";
 import { runBridge } from "./bridge.ts";
 import { loadConfig } from "./config.ts";
 import { install } from "./install.ts";
-import { paths, serviceName } from "./paths.ts";
-import { serviceStatus, uninstall, update } from "./service.ts";
+import { paths } from "./paths.ts";
+import { serviceName, serviceStatus, undeploy, update } from "./service.ts";
 import { errorMessage } from "./util.ts";
 
-const cli = meow(
-  `
+const help = `
   Usage: t3-signal-bridge <command>
 
   Commands:
@@ -24,55 +22,67 @@ const cli = meow(
   Options:
     --help      Show this help
     --version   Show the version
-`,
-  {
-    importMeta: import.meta,
-    pkg: packageJson,
-    description: false,
-    commands: ["install", "update", "status", "run", "ask", "uninstall"],
-  },
-);
+`;
 
-const appSource = fileURLToPath(import.meta.url);
+async function printStatus() {
+  const status = await serviceStatus();
+  console.log(`Bridge: ${status}`);
+  if (status === "not installed") {
+    console.log("Run `npx t3-signal-bridge install` to set it up.");
+  } else {
+    console.log(`Unit: ${paths.unit}`);
+    console.log(`Logs: journalctl --user -u ${serviceName}`);
+    if (status === "stopped")
+      console.log(`Run \`systemctl --user start ${serviceName}\` to start it.`);
+  }
+  process.exitCode = status === "running" ? 0 : 1;
+}
 
-try {
-  switch (cli.command) {
+async function runCommand(command: string, args: string[]) {
+  switch (command) {
     case "install":
-      await install(appSource);
+      await install(import.meta.filename);
       break;
     case "update":
-      update(appSource);
+      await update(import.meta.filename);
       console.log(`Updated the bridge to ${packageJson.version}.`);
       break;
-    case "status": {
-      const status = serviceStatus();
-      console.log(`Bridge: ${status}`);
-      if (status !== "not installed") {
-        console.log(`Unit: ${paths.unit}`);
-        console.log(`Logs: journalctl --user -u ${serviceName}`);
-      }
-      if (status === "not installed")
-        console.log("Run `npx t3-signal-bridge install` to set it up.");
-      if (status === "stopped")
-        console.log(`Run \`systemctl --user start ${serviceName}\` to start it.`);
-      process.exitCode = status === "running" ? 0 : 1;
+    case "status":
+      await printStatus();
       break;
-    }
     case "run":
       runBridge(loadConfig());
       break;
     case "ask":
-      await ask(cli.input.map(String));
+      await ask(args);
       break;
     case "uninstall":
-      uninstall();
+      await undeploy();
       console.log(
         `Removed the bridge. Your config is in ${paths.config} and Signal keys in ${paths.signalData}.`,
       );
       break;
     default:
-      cli.showHelp(0);
+      console.error(help);
+      process.exitCode = 1;
   }
+}
+
+try {
+  const {
+    values,
+    positionals: [command, ...args],
+  } = parseArgs({
+    allowPositionals: true,
+    options: {
+      help: { type: "boolean", short: "h" },
+      version: { type: "boolean", short: "v" },
+    },
+  });
+
+  if (values.version) console.log(packageJson.version);
+  else if (values.help || !command) console.log(help);
+  else await runCommand(command, args);
 } catch (error) {
   console.error(errorMessage(error));
   process.exit(1);

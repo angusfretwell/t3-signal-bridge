@@ -1,11 +1,23 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { delimiter, dirname } from "node:path";
-import { paths, serviceName } from "./paths.ts";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { userInfo } from "node:os";
+import { basename, dirname } from "node:path";
+import { exec, run } from "./exec.ts";
+import { paths } from "./paths.ts";
+import { writeFileIn } from "./util.ts";
+import { onPath } from "./which.ts";
+
+export const serviceName = basename(paths.unit);
 
 const shellQuote = (value: string) => `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
 const systemdQuote = (value: string) =>
-  `"${value.replace(/(["\\])/g, "\\$1").replaceAll("$", "$$$$")}"`;
+  `"${value.replace(/["\\]/g, "\\$&").replace(/[$%]/g, "$&$&")}"`;
+
+const systemctl = (...args: string[]) => run("systemctl", ["--user", ...args]);
+const succeeds = (work: Promise<unknown>) =>
+  work.then(
+    () => true,
+    () => false,
+  );
 
 export function renderUnit(node: string, app: string) {
   return `[Unit]
@@ -24,65 +36,63 @@ WantedBy=default.target
 
 export function renderAskShim(node: string, app: string) {
   return `#!/bin/sh
-exec ${shellQuote(node)} ${shellQuote(app)} ask "$@"
+exec ${shellQuote(node)} ${shellQuote(app)} ask -- "$@"
 `;
 }
 
-export function hasSystemd() {
-  return spawnSync("systemctl", ["--user", "--version"], { stdio: "ignore" }).status === 0;
-}
+const hasSystemd = () => succeeds(systemctl("--version"));
 
-export function copyApp(source: string) {
+function copyApp(source: string) {
   mkdirSync(dirname(paths.app), { recursive: true });
   copyFileSync(source, paths.app);
 }
 
-export function installAskShim(node: string) {
-  mkdirSync(dirname(paths.askShim), { recursive: true });
-  writeFileSync(paths.askShim, renderAskShim(node, paths.app));
+function installAskShim() {
+  writeFileIn(paths.askShim, renderAskShim(process.execPath, paths.app));
   chmodSync(paths.askShim, 0o755);
-  return (process.env.PATH ?? "").split(delimiter).includes(dirname(paths.askShim));
 }
 
-export function stopService() {
-  spawnSync("systemctl", ["--user", "stop", serviceName], { stdio: "ignore" });
+async function installUnit() {
+  writeFileIn(paths.unit, renderUnit(process.execPath, paths.app));
+  await systemctl("daemon-reload");
+  await systemctl("enable", serviceName);
+  await systemctl("restart", serviceName);
 }
 
-export function installService(node: string) {
-  mkdirSync(dirname(paths.unit), { recursive: true });
-  writeFileSync(paths.unit, renderUnit(node, paths.app));
-  execFileSync("systemctl", ["--user", "daemon-reload"]);
-  execFileSync("systemctl", ["--user", "enable", serviceName], { stdio: "ignore" });
-  execFileSync("systemctl", ["--user", "restart", serviceName]);
-}
-
-export function lingerEnabled() {
-  const result = spawnSync("loginctl", ["show-user", process.env.USER ?? "", "--property=Linger"], {
-    encoding: "utf8",
-  });
-  return result.stdout.trim() === "Linger=yes";
-}
-
-export function serviceStatus() {
-  if (!existsSync(paths.unit)) return "not installed";
-  const result = spawnSync("systemctl", ["--user", "is-active", serviceName], { encoding: "utf8" });
-  return result.stdout.trim() === "active" ? "running" : "stopped";
-}
-
-export function update(appSource: string) {
-  if (!existsSync(paths.app))
-    throw new Error("The bridge isn't installed. Run `npx t3-signal-bridge install` first.");
+export async function deploy(appSource: string) {
   copyApp(appSource);
-  installAskShim(process.execPath);
-  if (existsSync(paths.unit)) installService(process.execPath);
+  installAskShim();
+  const systemd = await hasSystemd();
+  if (systemd) await installUnit();
+  return { askOnPath: onPath(dirname(paths.askShim)), systemd };
 }
 
-export function uninstall() {
+export async function undeploy() {
   if (existsSync(paths.unit)) {
-    spawnSync("systemctl", ["--user", "disable", "--now", serviceName], { stdio: "ignore" });
+    await systemctl("disable", "--now", serviceName).catch(() => {});
     rmSync(paths.unit);
-    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    await systemctl("daemon-reload").catch(() => {});
   }
   rmSync(paths.askShim, { force: true });
   rmSync(dirname(paths.app), { recursive: true, force: true });
+}
+
+export async function update(appSource: string) {
+  if (!existsSync(paths.app))
+    throw new Error("The bridge isn't installed. Run `npx t3-signal-bridge install` first.");
+  await deploy(appSource);
+}
+
+export async function stopService() {
+  await systemctl("stop", serviceName).catch(() => {});
+}
+
+export async function serviceStatus() {
+  if (!existsSync(paths.unit)) return "not installed";
+  return (await succeeds(systemctl("is-active", serviceName))) ? "running" : "stopped";
+}
+
+export async function lingerEnabled() {
+  const result = await exec("loginctl", ["show-user", userInfo().username, "--property=Linger"]);
+  return result.stdout.trim() === "Linger=yes";
 }

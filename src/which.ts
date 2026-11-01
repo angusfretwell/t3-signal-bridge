@@ -1,8 +1,10 @@
 import { accessSync, constants } from "node:fs";
 import { delimiter, join } from "node:path";
 
+const pathDirs = () => (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+
 export function which(command: string) {
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+  for (const dir of pathDirs()) {
     const candidate = join(dir, command);
     try {
       accessSync(candidate, constants.X_OK);
@@ -11,3 +13,5 @@ export function which(command: string) {
   }
   return undefined;
 }
+
+export const onPath = (dir: string) => pathDirs().includes(dir);

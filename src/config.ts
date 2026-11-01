@@ -5,7 +5,7 @@ import { writeFileIn } from "./util.ts";
 
 export const defaultPort = 8787;
 
-export const configSchema = z.object({
+const configSchema = z.object({
   botNumber: z.string().min(1),
   botName: z.string().optional(),
   owner: z.string().min(1),
@@ -17,24 +17,26 @@ export const configSchema = z.object({
 });
 
 export type Config = z.infer<typeof configSchema>;
-export type ConfigInput = z.input<typeof configSchema>;
 
-export function readConfig(file = paths.config): Config | undefined {
+export function readConfig(): Config | undefined {
   let raw: string;
   try {
-    raw = readFileSync(file, "utf8");
+    raw = readFileSync(paths.config, "utf8");
   } catch {
     return undefined;
   }
   return configSchema.parse(JSON.parse(raw));
 }
 
-export function loadConfig(file = paths.config): Config {
-  const config = readConfig(file);
-  if (!config) throw new Error(`No config at ${file}. Run \`npx t3-signal-bridge install\` first.`);
+export function loadConfig(): Config {
+  const config = readConfig();
+  if (!config)
+    throw new Error(`No config at ${paths.config}. Run \`npx t3-signal-bridge install\` first.`);
   return config;
 }
 
-export function writeConfig(config: ConfigInput, file = paths.config) {
-  writeFileIn(file, `${JSON.stringify(configSchema.parse(config), null, 2)}\n`, { mode: 0o600 });
+export function writeConfig(config: z.input<typeof configSchema>) {
+  writeFileIn(paths.config, `${JSON.stringify(configSchema.parse(config), null, 2)}\n`, {
+    mode: 0o600,
+  });
 }

@@ -17,5 +17,3 @@ export const paths = {
   unit: join(configHome, "systemd/user", `${name}.service`),
   t3Home: process.env.T3CODE_HOME || join(home, ".t3"),
 };
-
-export const serviceName = `${name}.service`;
