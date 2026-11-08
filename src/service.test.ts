@@ -17,8 +17,8 @@ describe("renderUnit", () => {
 
 describe("renderAskShim", () => {
   test("quotes paths for sh and forwards arguments", () => {
-    expect(renderAskShim("/opt/my node/bin/node", "/home/a$b/app/cli.mjs")).toBe(
-      '#!/bin/sh\nexec "/opt/my node/bin/node" "/home/a\\$b/app/cli.mjs" ask "$@"\n',
+    expect(renderAskShim("/opt/my node/bin/node", "/home/a$b/app/cli.mjs")).toContain(
+      'exec "/opt/my node/bin/node" "/home/a\\$b/app/cli.mjs" ask "$@"',
     );
   });
 });

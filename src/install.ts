@@ -1,14 +1,20 @@
-import { dirname, isAbsolute } from "node:path";
+import { dirname } from "node:path";
 import * as p from "@clack/prompts";
 import { readConfig, writeConfig } from "./config.ts";
-import { tryRun } from "./exec.ts";
-import { insideT3Home, paths } from "./paths.ts";
-import { listProjects } from "./projects.ts";
+import { appName, paths } from "./paths.ts";
 import { canDownloadNative, downloadNative, findSignalCli, signalAccount } from "./signal-setup.ts";
-import { deploy, hasSystemd, lingerEnabled, startService, stopService } from "./service.ts";
-import { findT3 } from "./t3.ts";
+import {
+  deploy,
+  foregroundCommand,
+  hasSystemd,
+  lingerEnabled,
+  startService,
+  stopService,
+} from "./service.ts";
+import { pinnableT3, probeT3 } from "./t3.ts";
 import { errorMessage } from "./util.ts";
 import { onPath } from "./which.ts";
+import { listWorkspaces } from "./workspaces.ts";
 
 const phoneNumber = /^\+[1-9]\d{6,14}$/;
 const examplePhone = "+61400000000";
@@ -57,7 +63,7 @@ async function askPhone(message: string, initialValue?: string) {
 }
 
 async function askDefaultProject(existing?: string) {
-  const { projects } = await listProjects().catch((error) => fail(errorMessage(error)));
+  const { projects } = await listWorkspaces().catch((error) => fail(errorMessage(error)));
   const choice = answer(
     await p.select({
       message: "Where should messages without a project prefix start threads?",
@@ -134,13 +140,11 @@ async function register(account: ReturnType<typeof signalAccount>) {
 }
 
 async function requireT3(configured?: string) {
-  const t3 = findT3(configured);
-  const release = t3 && (await tryRun(t3, ["--version"]));
-  if (!t3 || !release)
-    fail("Couldn't run the T3 Code CLI. Install T3 Code, or put `t3` on your PATH.");
+  const t3 = await probeT3(configured);
+  if (!t3) fail("Couldn't run the T3 Code CLI. Install T3 Code, or put `t3` on your PATH.");
 
-  p.log.success(`Found T3 Code ${release}`);
-  return t3;
+  p.log.success(`Found T3 Code ${t3.version}`);
+  return t3.binary;
 }
 
 async function ensureSignalCli(configured?: string) {
@@ -159,13 +163,17 @@ async function ensureSignalCli(configured?: string) {
       "Install signal-cli (https://github.com/AsamK/signal-cli#installation) and run this again.",
     );
 
-  const version = await step("Downloading signal-cli", "Downloaded signal-cli", downloadNative);
+  const { version, binary } = await step(
+    "Downloading signal-cli",
+    "Downloaded signal-cli",
+    downloadNative,
+  );
   p.log.success(`Installed signal-cli ${version}`);
-  return paths.signalCliBinary;
+  return binary;
 }
 
-export async function install(appSource: string) {
-  p.intro("t3-signal-bridge");
+export async function install(bundledCli: string) {
+  p.intro(appName);
 
   const existing = readConfig();
   const t3 = await requireT3(existing?.t3Bin);
@@ -187,8 +195,6 @@ export async function install(appSource: string) {
   );
   const ownerUuid = await account.uuidOf(owner).catch(() => undefined);
 
-  const t3IsStable = isAbsolute(t3) && !insideT3Home(t3);
-  const t3Bin = existing?.t3Bin ?? (t3IsStable ? t3 : undefined);
   writeConfig({
     botNumber,
     botName,
@@ -197,10 +203,10 @@ export async function install(appSource: string) {
     signalCli,
     defaultProject,
     port: existing?.port,
-    t3Bin,
+    t3Bin: existing?.t3Bin ?? pinnableT3(t3),
   });
 
-  deploy(appSource);
+  deploy(bundledCli);
   const shimDir = dirname(paths.askShim);
   if (!onPath(shimDir)) p.log.warn(`Add ${shimDir} to your PATH so agents can run signal-ask.`);
 
@@ -210,7 +216,7 @@ export async function install(appSource: string) {
       p.log.warn("Run `loginctl enable-linger` so the bridge keeps running after you log out.");
   } else {
     p.log.warn(
-      `No systemd found. Keep \`${process.execPath} ${paths.app} run\` running with your own service manager.`,
+      `No systemd found. Keep \`${foregroundCommand}\` running with your own service manager.`,
     );
   }
 

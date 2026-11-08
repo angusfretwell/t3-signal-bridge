@@ -1,10 +1,12 @@
 import { createServer, type ServerResponse } from "node:http";
 import { text } from "node:stream/consumers";
 import { z } from "zod";
-import { defaultPort, readConfig } from "./config.ts";
+import { loadConfig } from "./config.ts";
+import { appName } from "./paths.ts";
 import { errorMessage, parseJson } from "./util.ts";
 
 const host = "127.0.0.1";
+const askPath = "/ask";
 
 const askSchema = z.object({ threadId: z.string().min(1), question: z.string().min(1) });
 
@@ -17,7 +19,7 @@ export function serveAsk(
   onQuestion: (threadId: string, question: string) => Promise<void>,
 ) {
   const server = createServer(async (request, response) => {
-    if (request.method !== "POST" || request.url !== "/ask") {
+    if (request.method !== "POST" || request.url !== askPath) {
       response.writeHead(404).end();
       return;
     }
@@ -50,9 +52,7 @@ export function serveAsk(
     sendJson(response, 200, { sent: true });
   });
 
-  return server.listen(port, host, () =>
-    console.log(`t3-signal-bridge listening on ${host}:${port}`),
-  );
+  return server.listen(port, host, () => console.log(`${appName} listening on ${host}:${port}`));
 }
 
 function fetchFailure(error: unknown) {
@@ -70,12 +70,11 @@ export async function ask(args: string[]) {
   ).trim();
   if (!question) throw new Error('Usage: signal-ask "<question>" (or pipe the question on stdin)');
 
-  const port = readConfig()?.port ?? defaultPort;
-  const bridgeUrl = process.env.SIGNAL_BRIDGE_URL ?? `http://${host}:${port}`;
+  const { port } = loadConfig();
 
   let failure: string | undefined;
   try {
-    const response = await fetch(`${bridgeUrl}/ask`, {
+    const response = await fetch(`http://${host}:${port}${askPath}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ threadId, question }),

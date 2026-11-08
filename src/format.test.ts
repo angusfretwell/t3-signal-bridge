@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { runReport, threadHeader, threadMessage, toSignal } from "./format.ts";
+import { threadMessage, toSignal } from "./format.ts";
 
 function emptyFile(name: string) {
   const file = join(mkdtempSync(join(tmpdir(), "format-")), name);
@@ -145,42 +145,26 @@ describe("toSignal", () => {
   });
 });
 
-describe("threadHeader", () => {
+describe("threadMessage", () => {
+  const header = (title: string) => threadMessage(title, "").text.trimEnd();
+
   test("keeps short titles whole", () => {
-    expect(threadHeader("Bump deps")).toBe("🧵 Bump deps");
+    expect(header("Bump deps")).toBe("🧵 Bump deps");
   });
 
   test("cuts long titles to 40 characters", () => {
-    expect(
-      threadHeader("just testing signal integration out, don’t do anything, just reply to me"),
-    ).toBe("🧵 just testing signal integration out, do…");
+    expect(header("just testing signal integration out, don’t do anything, just reply to me")).toBe(
+      "🧵 just testing signal integration out, do…",
+    );
   });
 
   test("keeps emoji whole when cutting", () => {
-    expect(threadHeader(`${"a".repeat(38)}👩‍💻 and more`)).toBe(`🧵 ${"a".repeat(38)}👩‍💻…`);
+    expect(header(`${"a".repeat(38)}👩‍💻 and more`)).toBe(`🧵 ${"a".repeat(38)}👩‍💻…`);
   });
-});
 
-describe("threadMessage", () => {
   test("puts the thread header first and keeps styles on their text", () => {
     const { text, styles } = threadMessage("👩‍💻 Fix login", "I **fixed** it");
     expect(text).toBe("🧵 👩‍💻 Fix login\n\nI fixed it");
     expect(styles.map(({ start, length }) => text.slice(start, start + length))).toEqual(["fixed"]);
-  });
-});
-
-describe("runReport", () => {
-  test("reports a completed run as its reply", () => {
-    expect(runReport({ threadId: "t", status: "completed", reply: "Done." })).toBe("Done.");
-  });
-
-  test("says when a completed run didn't reply", () => {
-    expect(runReport({ threadId: "t", status: "completed", reply: null })).toBe("(no reply)");
-  });
-
-  test("leads a failed run with its status and error, then the reply", () => {
-    expect(
-      runReport({ threadId: "t", status: "failed", error: "out of tokens", reply: "Half done." }),
-    ).toBe("Run failed: out of tokens\n\nHalf done.");
   });
 });

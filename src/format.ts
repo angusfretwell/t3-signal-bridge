@@ -6,7 +6,6 @@ import { gfmFromMarkdown } from "mdast-util-gfm";
 import { toString } from "mdast-util-to-string";
 import { gfm } from "micromark-extension-gfm";
 import type { StyleRange, TextStyle } from "./signal.ts";
-import type { RunResult } from "./t3.ts";
 
 const inlineStyles: Partial<Record<Nodes["type"], TextStyle>> = {
   strong: "BOLD",
@@ -166,7 +165,7 @@ export function toSignal(markdown: string) {
 
 const maxTitleLength = 40;
 
-export function threadHeader(title: string) {
+function threadHeader(title: string) {
   const characters = Array.from(new Intl.Segmenter().segment(title), ({ segment }) => segment);
   if (characters.length <= maxTitleLength) return `🧵 ${title}`;
 
@@ -182,11 +181,4 @@ export function threadMessage(title: string, markdown: string) {
     styles: styles.map((range) => ({ ...range, start: range.start + header.length })),
     attachments,
   };
-}
-
-export function runReport(result: RunResult) {
-  if (result.status === "completed") return result.reply || "(no reply)";
-
-  const summary = result.error ? `Run ${result.status}: ${result.error}` : `Run ${result.status}`;
-  return result.reply ? `${summary}\n\n${result.reply}` : summary;
 }

@@ -1,21 +1,18 @@
 import { serveAsk } from "./ask.ts";
 import type { Config } from "./config.ts";
-import { runReport, threadMessage } from "./format.ts";
+import { threadMessage } from "./format.ts";
 import { defaultBranch } from "./git.ts";
 import { paths } from "./paths.ts";
-import { listProjects } from "./projects.ts";
-import { pickWorkspace, route } from "./route.ts";
+import { route } from "./route.ts";
 import { connectSignal, type Incoming } from "./signal.ts";
-import { ThreadStore } from "./store.ts";
-import { createT3, findT3 } from "./t3.ts";
+import { openThreadStore } from "./store.ts";
+import { createT3, runReport } from "./t3.ts";
 import { errorMessage } from "./util.ts";
+import { listWorkspaces, pickWorkspace } from "./workspaces.ts";
 
 export function runBridge(config: Config) {
-  const t3Binary = findT3(config.t3Bin);
-  if (!t3Binary) throw new Error("Couldn't find the T3 Code CLI. Set t3Bin in the config.");
-
-  const t3 = createT3(t3Binary);
-  const store = new ThreadStore(paths.threads);
+  const t3 = createT3(config.t3Bin);
+  const store = openThreadStore(paths.threads);
   const signal = connectSignal({
     binary: config.signalCli,
     botNumber: config.botNumber,
@@ -36,7 +33,7 @@ export function runBridge(config: Config) {
   }
 
   async function startThread(text: string) {
-    const workspace = pickWorkspace(text, await listProjects(), config.defaultProject);
+    const workspace = pickWorkspace(text, await listWorkspaces(), config.defaultProject);
     const base = workspace.isProject ? await defaultBranch(workspace.path) : undefined;
     return t3.startThread(workspace.path, workspace.text, base);
   }
@@ -61,6 +58,7 @@ export function runBridge(config: Config) {
 
   serveAsk(config.port, (threadId, question) => sendFromThread(threadId, `❓ ${question}`));
 
+  process.on("exit", () => signal.stop());
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
   void signal.exited.then((code) => {

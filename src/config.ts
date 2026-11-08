@@ -1,9 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
-import { paths } from "./paths.ts";
+import { installCommand, paths } from "./paths.ts";
 import { writeFileIn } from "./util.ts";
-
-export const defaultPort = 8787;
 
 const configSchema = z.object({
   botNumber: z.string().min(1),
@@ -12,7 +10,7 @@ const configSchema = z.object({
   ownerUuid: z.string().optional(),
   signalCli: z.string().min(1),
   defaultProject: z.string().optional(),
-  port: z.number().int().default(defaultPort),
+  port: z.number().int().default(8787),
   t3Bin: z.string().optional(),
 });
 
@@ -25,8 +23,7 @@ export function readConfig(): Config | undefined {
 
 export function loadConfig(): Config {
   const config = readConfig();
-  if (!config)
-    throw new Error(`No config at ${paths.config}. Run \`npx t3-signal-bridge install\` first.`);
+  if (!config) throw new Error(`No config at ${paths.config}. Run \`${installCommand}\` first.`);
   return config;
 }
 

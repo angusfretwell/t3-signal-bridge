@@ -79,7 +79,6 @@ export function connectSignal(options: {
   const child = spawn(binary, signalCliArgs(botNumber, "jsonRpc"), {
     stdio: ["pipe", "pipe", "inherit"],
   });
-  process.on("exit", () => child.kill());
 
   createInterface({ input: child.stdout }).on("line", (line) => {
     const json = parseJson(line);
@@ -127,5 +126,6 @@ export function connectSignal(options: {
     react: (emoji: string, targetTimestamp: number) =>
       call("sendReaction", { recipient: [owner], emoji, targetAuthor: owner, targetTimestamp }),
     exited,
+    stop: () => child.kill(),
   };
 }

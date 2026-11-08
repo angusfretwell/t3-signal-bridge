@@ -45,7 +45,7 @@ export async function downloadNative() {
     await rm(archive, { force: true });
   }
 
-  return release.tag_name;
+  return { version: release.tag_name, binary: paths.signalCliBinary };
 }
 
 const contactsSchema = z.array(
